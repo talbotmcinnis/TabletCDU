@@ -117,7 +117,6 @@ for k in pos_map.keys():
 def set_char(line, column, c):
         if c not in font:
             c = b"?"
-        print(font[c])
         screen.blit(font[c], (180+CHARACTER_WIDTH*column, 117+CHARACTER_HEIGHT*line))
 
 CDUDISPLAY_START_ADDRESS = 0x11c0
@@ -268,7 +267,7 @@ while running == True:
         
     pygame.display.flip()
     
-    sleep(0.5)
+    sleep(0.1)
 
 pygame.quit()
 sys.exit()
