@@ -37,6 +37,26 @@ def set_char(line, column, c):
         c = b"?"
     screen.blit(font[c], (178+CHARACTER_WIDTH*column, 117+CHARACTER_HEIGHT*line))
 
+def cdu_press(btn):
+    if(btn == '+'):
+        msg1 = 'CDU_DATA 2'
+        msg2 = 'CDU_DATA 1'
+    elif(btn == '-'):
+        msg1 = 'CDU_DATA 0'
+        msg2 = 'CDU_DATA 1'
+    elif(btn == 'PG+'):
+        msg1 = 'CDU_PG 2'
+        msg2 = 'CDU_PG 1'
+    elif(btn == 'PG-'):
+        msg1 = 'CDU_PG 0'
+        msg2 = 'CDU_PG 1'
+    else:
+        msg1 = 'CDU_' + btn + ' 1'
+        msg2 = 'CDU_' + btn + ' 0'
+    s_tx.send(msg1)
+    sleep(0.1)
+    s_tx.send(msg2) 
+
 # Setup the display callback for when parsed data changes
 def update_display(address, data):
         #print('Parser update {}={}'.format(address,data))
@@ -63,6 +83,11 @@ CONNECTION = {
     "host":"192.168.0.29",
        "type":"UDP",
         "port":7779
+}
+
+SIM_INFO = {
+    "host":"192.168.0.29",
+        "port":7778
 }
 
 pos_map = {
@@ -160,8 +185,8 @@ cdu_buttons = [CDUButton(66,531,79,86,'SYS'),
                CDUButton(540,944,79,93,'V'),
                CDUButton(620,944,79,93,'W'),
                CDUButton(703,944,79,92,'X'),
-               CDUButton(188,944,93,98,'/'),
-               CDUButton(2,944,93,98,'.'),
+               CDUButton(188,944,93,98,'SLASH'),
+               CDUButton(2,944,93,98,'POINT'),
                CDUButton(13,632,82,104,'1'),
                CDUButton(102,632,82,104,'2'),
                CDUButton(188,632,82,104,'3'),
@@ -172,25 +197,25 @@ cdu_buttons = [CDUButton(66,531,79,86,'SYS'),
                CDUButton(99,839,82,104,'8'),
                CDUButton(188,839,82,104,'9'),
                CDUButton(99,944,82,104,'0'),
-               CDUButton(46,163,118,70,'LSK1'),
-               CDUButton(46,234,118,70,'LSK2'),
-               CDUButton(46,303,118,67,'LSK3'),
-               CDUButton(46,374,118,67,'LSK4'),
-               CDUButton(631,163,118,70,'RSK1'),
-               CDUButton(631,234,118,70,'RSK2'),
-               CDUButton(631,303,118,67,'RSK3'),
-               CDUButton(631,374,118,67,'RSK4'),
+               CDUButton(46,163,118,70,'LSK_3L'),
+               CDUButton(46,234,118,70,'LSK_5L'),
+               CDUButton(46,303,118,67,'LSK_7L'),
+               CDUButton(46,374,118,67,'LSK_9L'),
+               CDUButton(631,163,118,70,'LSK_3R'),
+               CDUButton(631,234,118,70,'LSK_5R'),
+               CDUButton(631,303,118,67,'LSK_7R'),
+               CDUButton(631,374,118,67,'LSK_9R'),
                CDUButton(316,1047,82,104,'BCK'),
                CDUButton(402,1047,82,104,'SPC'),
                CDUButton(485,1047,77,104,'Y'),
                CDUButton(564,1047,77,104,'Z'),
-               CDUButton(656,1058,72,89,'+'),
-               CDUButton(656,1152,72,89,'-'),
+               CDUButton(656,1058,72,89,'+'),   ###
+               CDUButton(656,1152,72,89,'-'),   ###
                CDUButton(566,1155,72,104,'FA'),
-               CDUButton(483,1153,80,91,'CA'),
+               CDUButton(483,1153,80,91,'CLR'),
                CDUButton(190,1153,80,91,'MK'),
-               CDUButton(65,1153,80,91,'PG-'),
-                CDUButton(65,1056,80,91,'PG+'),
+               CDUButton(65,1153,80,91,'PG-'), ###
+                CDUButton(65,1056,80,91,'PG+'), ###
                CDUButton(717,1,82,75,'QUIT')
                ]
 
@@ -202,6 +227,10 @@ elif CONNECTION["type"] == "UDP":
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.bind(("0.0.0.0", CONNECTION["port"]))
 s.settimeout(0)
+
+s_tx = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s_tx.connect((SIM_INFO["host"], SIM_INFO["port"]))
+s_tx.setttimeout(0)
 
 pygame.init()
 pygame.mixer.init()
@@ -234,7 +263,7 @@ parser = ProtocolParser()
 parser.write_callbacks.add(update_display)
 
 #pygame.scrap.init()
-#pixelRuler = PixelRuler(500,00,82,104)
+pixelRuler = PixelRuler(500,00,82,104)
 
 pygame.display.toggle_fullscreen()
 
@@ -243,7 +272,7 @@ while running == True:
     screen.blit(cdu_bg, (0,0))
 
     #Debug only print all button outlines
-    """for btn in cdu_buttons:
+    for btn in cdu_buttons:
         pygame.draw.rect(screen, (0,255,0),(btn.X,btn.Y,btn.WIDTH,btn.HEIGHT), 1)
     pygame.draw.rect(screen, (255,0,0),(pixelRuler.X,pixelRuler.Y,pixelRuler.WIDTH,pixelRuler.HEIGHT), 1)
 
@@ -272,7 +301,7 @@ while running == True:
         pixelRuler.ToClipboard()
     if keys[pygame.K_s]:
         pixelRuler.HEIGHT += 1
-        pixelRuler.ToClipboard()"""
+        pixelRuler.ToClipboard()
 
     # Receive new data from DCS
     while 1:
