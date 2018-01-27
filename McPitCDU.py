@@ -53,9 +53,9 @@ def cdu_press(btn):
     else:
         msg1 = 'CDU_' + btn + ' 1'
         msg2 = 'CDU_' + btn + ' 0'
-    s_tx.send(msg1)
+    s_tx.send(msg1+'\n')
     sleep(0.1)
-    s_tx.send(msg2) 
+    s_tx.send(msg2+'\n') 
 
 # Setup the display callback for when parsed data changes
 def update_display(address, data):
@@ -230,7 +230,7 @@ s.settimeout(0)
 
 s_tx = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 s_tx.connect((SIM_INFO["host"], SIM_INFO["port"]))
-s_tx.setttimeout(0)
+s_tx.settimeout(0)
 
 pygame.init()
 pygame.mixer.init()
@@ -263,7 +263,7 @@ parser = ProtocolParser()
 parser.write_callbacks.add(update_display)
 
 #pygame.scrap.init()
-pixelRuler = PixelRuler(500,00,82,104)
+#pixelRuler = PixelRuler(500,00,82,104)
 
 pygame.display.toggle_fullscreen()
 
@@ -272,7 +272,7 @@ while running == True:
     screen.blit(cdu_bg, (0,0))
 
     #Debug only print all button outlines
-    for btn in cdu_buttons:
+    """for btn in cdu_buttons:
         pygame.draw.rect(screen, (0,255,0),(btn.X,btn.Y,btn.WIDTH,btn.HEIGHT), 1)
     pygame.draw.rect(screen, (255,0,0),(pixelRuler.X,pixelRuler.Y,pixelRuler.WIDTH,pixelRuler.HEIGHT), 1)
 
@@ -302,7 +302,7 @@ while running == True:
     if keys[pygame.K_s]:
         pixelRuler.HEIGHT += 1
         pixelRuler.ToClipboard()
-
+"""
     # Receive new data from DCS
     while 1:
         try:
@@ -332,6 +332,7 @@ while running == True:
             for btn in cdu_buttons:
                 if( x >= btn.X and x < (btn.X+btn.WIDTH) and y >= btn.Y and (y < btn.Y+btn.HEIGHT) ):
                     print(btn.PARAM)
+                    cdu_press(btn.PARAM)
                     if( btn.PARAM == "QUIT" ):
                         running = False
                     else:
