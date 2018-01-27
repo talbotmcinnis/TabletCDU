@@ -1,9 +1,14 @@
+#!python2
 import sys, pygame
 
+import socket
 from pygame.locals import *
 from time import sleep
 from collections import namedtuple
 from dcsbios import ProtocolParser, StringBuffer, IntegerBuffer
+
+#from ctypes import windll, Structure, c_long, byref
+import struct
 
 class PixelRuler:
     X = 0
@@ -20,25 +25,45 @@ class PixelRuler:
     def ToClipboard(self):
         pygame.scrap.put(SCRAP_TEXT, ('CDUButton(' + str(self.X) + ',' + str(self.Y) + ',' + str(self.WIDTH) + ',' + str(self.HEIGHT) + ',\'\'),').encode('utf-8'))
 
-CDU_COLOR = (0, 255, 0)
-CHARACTER_SIZE = 21
-CHARACTER_WIDTH = 18
-CHARACTER_HEIGHT = 36
-
-pygame.init()
-pygame.mixer.init()
-
-font_img = pygame.image.load("font_A-10_CDU.tga")  # 512x512 pixel, 8x8 characters
-click_sound = pygame.mixer.Sound("click.wav")
-
-parser = ProtocolParser()
-
 def get_subimg(index):
         assert index >= 0 and index <= 63
         row = index // 8
         col = index - row*8
         img = font_img.subsurface(col*64, row*64, 64, 64)
         return img
+
+def set_char(line, column, c):
+    if c not in font:
+        c = b"?"
+    screen.blit(font[c], (178+CHARACTER_WIDTH*column, 117+CHARACTER_HEIGHT*line))
+
+# Setup the display callback for when parsed data changes
+def update_display(address, data):
+        #print('Parser update {}={}'.format(address,data))
+        if address < CDUDISPLAY_START_ADDRESS or address >= CDUDISPLAY_START_ADDRESS + 10*24:
+            #print('bad addr');
+            return
+        
+        offset = address - CDUDISPLAY_START_ADDRESS
+        data_bytes = struct.pack("<H", data)
+        cdu_display_data[offset] = data_bytes[0]
+        cdu_display_data[offset+1] = data_bytes[1]
+
+# Constants
+CDU_COLOR = (0, 255, 0)
+CHARACTER_SIZE = 21
+CHARACTER_WIDTH = 18
+CHARACTER_HEIGHT = 36
+CDUDISPLAY_START_ADDRESS = 0x11c0
+# use UDP (configure a UDPSender in BIOSConfig.lua
+# to send the data to the host running this script)
+# Line is:
+# BIOS.protocol_io.UDPSender:create({ port = 7779, host = "127.0.0.1" })
+CONNECTION = {
+    "host":"192.168.0.29",
+       "type":"UDP",
+        "port":7779
+}
 
 pos_map = {
         chr(0xA9):0, # SYS_ACTION / "bullseye"
@@ -104,47 +129,6 @@ pos_map = {
 
 font = {}
 
-for k in pos_map.keys():
-        img = get_subimg(pos_map[k])
-        for x in range(64):
-                for y in range(64):
-                        r,g,b,a = img.get_at((x,y))
-                        if a > 128:
-                                img.set_at((x,y), CDU_COLOR)
-        img = pygame.transform.scale(img, (CHARACTER_SIZE, CHARACTER_SIZE))
-        font[k] = img
-
-def set_char(line, column, c):
-        if c not in font:
-            c = b"?"
-        screen.blit(font[c], (180+CHARACTER_WIDTH*column, 117+CHARACTER_HEIGHT*line))
-
-CDUDISPLAY_START_ADDRESS = 0x11c0
-cdu_display_data = bytearray(24*10)
-
-# Setup the display callback for when parsed data changes
-def update_display(address, data):
-        
-        if address < CDUDISPLAY_START_ADDRESS or address >= CDUDISPLAY_START_ADDRESS + 10*24:
-                return
-        # print('Parser update {}={}'.format(address,data))
-        offset = address - CDUDISPLAY_START_ADDRESS
-        data_bytes = struct.pack("<H", data)
-        cdu_display_data[offset] = data_bytes[0]
-        cdu_display_data[offset+1] = data_bytes[1]
-
-parser.write_callbacks.add(update_display)
-
-size = width, height = 800, 1280
-
-screen = pygame.display.set_mode(size, pygame.DOUBLEBUF | pygame.NOFRAME, 32)
-
-pygame.scrap.init()
-
-cdu_bg = pygame.image.load("cdu_bg.bmp")
-cdu_bg = pygame.transform.scale(cdu_bg, (800,1280))
-cdu_bg_rect = cdu_bg.get_rect()
-
 CDUButton = namedtuple("CDUButton", "X Y WIDTH HEIGHT PARAM")
 cdu_buttons = [CDUButton(66,531,79,86,'SYS'),
                CDUButton(149,531,79,86,'NAV'),
@@ -206,22 +190,65 @@ cdu_buttons = [CDUButton(66,531,79,86,'SYS'),
                CDUButton(483,1153,80,91,'CA'),
                CDUButton(190,1153,80,91,'MK'),
                CDUButton(65,1153,80,91,'PG-'),
-                CDUButton(65,1056,80,91,'PG+')
+                CDUButton(65,1056,80,91,'PG+'),
+               CDUButton(717,1,82,75,'QUIT')
                ]
 
-#pixelRuler = PixelRuler(300,900,82,104)
+# Initialization
+if CONNECTION["type"] == "TCP":
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect((CONNECTION["host"], CONNECTION["port"]))
+elif CONNECTION["type"] == "UDP":
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.bind(("0.0.0.0", CONNECTION["port"]))
+s.settimeout(0)
+
+pygame.init()
+pygame.mixer.init()
+
+cdu_display_data = bytearray(24*10)
+
+size = width, height = 800, 1280
+screen = pygame.display.set_mode(size, pygame.DOUBLEBUF | pygame.NOFRAME | pygame.FULLSCREEN, 32)
+
+#Loading
+font_img = pygame.image.load("font_A-10_CDU.tga")  # 512x512 pixel, 8x8 characters
+cdu_bg = pygame.image.load("cdu_bg.bmp")
+cdu_bg = pygame.transform.scale(cdu_bg, (width,height))
+cdu_bg_rect = cdu_bg.get_rect()
+
+click_sound = pygame.mixer.Sound("click.wav")
+
+for k in pos_map.keys():
+        img = get_subimg(pos_map[k])
+        for x in range(64):
+                for y in range(64):
+                        r,g,b,a = img.get_at((x,y))
+                        if a > 128:
+                                img.set_at((x,y), CDU_COLOR)
+        img = pygame.transform.scale(img, (CHARACTER_SIZE, CHARACTER_SIZE))
+        font[k] = img
+
+# DCS-Bios Parser
+parser = ProtocolParser()
+parser.write_callbacks.add(update_display)
+
+#pygame.scrap.init()
+#pixelRuler = PixelRuler(500,00,82,104)
+
+pygame.display.toggle_fullscreen()
 
 running = True
 while running == True:
     screen.blit(cdu_bg, (0,0))
 
     #Debug only print all button outlines
-    #for btn in cdu_buttons:
-    #    pygame.draw.rect(screen, (0,255,0),(btn.X,btn.Y,btn.WIDTH,btn.HEIGHT), 1)
-    #pygame.draw.rect(screen, (255,0,0),(pixelRuler.X,pixelRuler.Y,pixelRuler.WIDTH,pixelRuler.HEIGHT), 1)
+    """for btn in cdu_buttons:
+        pygame.draw.rect(screen, (0,255,0),(btn.X,btn.Y,btn.WIDTH,btn.HEIGHT), 1)
+    pygame.draw.rect(screen, (255,0,0),(pixelRuler.X,pixelRuler.Y,pixelRuler.WIDTH,pixelRuler.HEIGHT), 1)
 
     # Debug print the pixel ruler
-    """keys = pygame.key.get_pressed()
+    keys = pygame.key.get_pressed()
     if keys[pygame.K_LEFT]:
         pixelRuler.X -= 1
         pixelRuler.ToClipboard()
@@ -247,12 +274,26 @@ while running == True:
         pixelRuler.HEIGHT += 1
         pixelRuler.ToClipboard()"""
 
+    # Receive new data from DCS
+    while 1:
+        try:
+            data = s.recv(8192)
+            if data:
+                for c in data:
+                    parser.processByte(c)
+        except BaseException as e:
+            #print('Parser Exception: '+ str(e))
+            break;
+        
     # Copy data from cdu data array to screen
     for i in range(24*10):
         row = i // 24
         col = i - (row*24)
+        
         set_char(row, col, chr(cdu_display_data[i]))
-			
+        #print('data{},{}={} []'.format(row,col,format(cdu_display_data[i],'02x'),chr(cdu_display_data[i])))
+
+    # PyGame event loop
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
@@ -262,12 +303,15 @@ while running == True:
             for btn in cdu_buttons:
                 if( x >= btn.X and x < (btn.X+btn.WIDTH) and y >= btn.Y and (y < btn.Y+btn.HEIGHT) ):
                     print(btn.PARAM)
-                    click_sound.play()
-                    pygame.draw.rect(screen, (150,150,150),(btn.X,btn.Y,btn.WIDTH,btn.HEIGHT), 3)
+                    if( btn.PARAM == "QUIT" ):
+                        running = False
+                    else:
+                        click_sound.play()
+                        pygame.draw.rect(screen, (150,150,150),(btn.X,btn.Y,btn.WIDTH,btn.HEIGHT), 3)
         
     pygame.display.flip()
     
-    sleep(0.1)
+    sleep(0.1) #Slow us down a bit
 
 pygame.quit()
 sys.exit()
