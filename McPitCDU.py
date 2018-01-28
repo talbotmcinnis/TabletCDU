@@ -269,14 +269,14 @@ parser.write_callbacks.add(update_display)
 
 clock = pygame.time.Clock()
 frame_count = 0
+framerate_max = 45
 
 print('Starting main loop')
 running = True
 while running == True:
     # Slow down the loop so we don't kill the CPU
-    #pygame.time.wait(100)
-    msThisFrame = clock.tick()
-    print('FPS:' + str(1000/msThisFrame))
+    msThisFrame = clock.tick(framerate_max)
+    #print('FPS:' + str(1000/msThisFrame))
     
     screen.blit(cdu_bg, (0,0))
 
