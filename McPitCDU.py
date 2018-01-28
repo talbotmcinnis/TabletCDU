@@ -78,25 +78,6 @@ CHARACTER_WIDTH = 18
 CHARACTER_HEIGHT = 36
 CDUDISPLAY_START_ADDRESS = 0x11c0
 
-# use TCP (no configuration of DCS-BIOS required, but the
-# script needs to be started after getting into the cockpit)
-"""CONNECTION = {
-    "host":"192.168.0.29",
-    "type":"TCP",
-    "port":7778
-}"""
-
-# use UDP (configure a UDPSender in BIOSConfig.lua
-# to send the data to the host running this script)
-# Line is:
-# BIOS.protocol_io.UDPSender:create({ port = 7779, host = "127.0.0.1" })
-CONNECTION = {
-    "host":"192.168.0.29",
-    "senderType":"UDP",
-    "senderPort":7779,
-    "listnerPort":7778
-}
-
 pos_map = {
         chr(0xA9):0, # SYS_ACTION / "bullseye"
         chr(0xAE):1, # ROTARY / up/down arrow
@@ -227,17 +208,28 @@ cdu_buttons = [CDUButton(66,531,79,86,'SYS'),
                ]
 
 # Initialization
-if CONNECTION["senderType"] == "TCP":
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.connect((CONNECTION["host"], CONNECTION["senderPort"]))
-elif CONNECTION["senderType"] == "UDP":
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.bind(("0.0.0.0", CONNECTION["senderPort"]))
+
+# use UDP (configure a UDPSender in BIOSConfig.lua
+# to send the data to the host running this script)
+# Line is:
+# BIOS.protocol_io.UDPSender:create({ port = 7779, host = "127.0.0.1" })
+CONNECTION = {
+    "host":"192.168.0.29"
+}
+
+print ('Waiting to connect...')
+
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.bind(("0.0.0.0", 7779))
 s.settimeout(0)
 
-s_tx = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s_tx.connect((CONNECTION["host"], CONNECTION["listnerPort"]))
+print('Connected.  Opening outbound socket')
+
+s_tx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s_tx.connect((CONNECTION["host"], 7778))
 s_tx.settimeout(0)
+
+print('Connected.')
 
 pygame.init()
 pygame.mixer.init()
@@ -273,12 +265,18 @@ parser.write_callbacks.add(update_display)
 #pygame.scrap.init()
 #pixelRuler = PixelRuler(500,00,82,104)
 
-pygame.display.toggle_fullscreen()
+#pygame.display.toggle_fullscreen()
 
+clock = pygame.time.Clock()
+frame_count = 0
+
+print('Starting main loop')
 running = True
 while running == True:
     # Slow down the loop so we don't kill the CPU
-    pygame.time.wait(100)
+    #pygame.time.wait(100)
+    msThisFrame = clock.tick()
+    print('FPS:' + str(1000/msThisFrame))
     
     screen.blit(cdu_bg, (0,0))
 
