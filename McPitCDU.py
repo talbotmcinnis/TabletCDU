@@ -237,7 +237,7 @@ pygame.mixer.init()
 cdu_display_data = bytearray(24*10)
 
 size = width, height = 800, 1280
-screen = pygame.display.set_mode(size, pygame.DOUBLEBUF | pygame.NOFRAME , 32)
+screen = pygame.display.set_mode(size, pygame.DOUBLEBUF | pygame.NOFRAME | pygame.FULLSCREEN, 32)
 # | pygame.FULLSCREEN
 
 #Loading
