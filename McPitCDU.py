@@ -1,4 +1,6 @@
 #!python2
+from __future__ import print_function
+
 import sys, pygame
 
 import socket
@@ -75,19 +77,24 @@ CHARACTER_SIZE = 21
 CHARACTER_WIDTH = 18
 CHARACTER_HEIGHT = 36
 CDUDISPLAY_START_ADDRESS = 0x11c0
+
+# use TCP (no configuration of DCS-BIOS required, but the
+# script needs to be started after getting into the cockpit)
+"""CONNECTION = {
+    "host":"192.168.0.29",
+    "type":"TCP",
+    "port":7778
+}"""
+
 # use UDP (configure a UDPSender in BIOSConfig.lua
 # to send the data to the host running this script)
 # Line is:
 # BIOS.protocol_io.UDPSender:create({ port = 7779, host = "127.0.0.1" })
 CONNECTION = {
     "host":"192.168.0.29",
-       "type":"UDP",
-        "port":7779
-}
-
-SIM_INFO = {
-    "host":"192.168.0.29",
-        "port":7778
+    "senderType":"UDP",
+    "senderPort":7779,
+    "listnerPort":7778
 }
 
 pos_map = {
@@ -220,16 +227,16 @@ cdu_buttons = [CDUButton(66,531,79,86,'SYS'),
                ]
 
 # Initialization
-if CONNECTION["type"] == "TCP":
+if CONNECTION["senderType"] == "TCP":
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.connect((CONNECTION["host"], CONNECTION["port"]))
-elif CONNECTION["type"] == "UDP":
+        s.connect((CONNECTION["host"], CONNECTION["senderPort"]))
+elif CONNECTION["senderType"] == "UDP":
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.bind(("0.0.0.0", CONNECTION["port"]))
+        s.bind(("0.0.0.0", CONNECTION["senderPort"]))
 s.settimeout(0)
 
 s_tx = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s_tx.connect((SIM_INFO["host"], SIM_INFO["port"]))
+s_tx.connect((CONNECTION["host"], CONNECTION["listnerPort"]))
 s_tx.settimeout(0)
 
 pygame.init()
@@ -238,7 +245,8 @@ pygame.mixer.init()
 cdu_display_data = bytearray(24*10)
 
 size = width, height = 800, 1280
-screen = pygame.display.set_mode(size, pygame.DOUBLEBUF | pygame.NOFRAME | pygame.FULLSCREEN, 32)
+screen = pygame.display.set_mode(size, pygame.DOUBLEBUF | pygame.NOFRAME , 32)
+# | pygame.FULLSCREEN
 
 #Loading
 font_img = pygame.image.load("font_A-10_CDU.tga")  # 512x512 pixel, 8x8 characters
@@ -269,6 +277,9 @@ pygame.display.toggle_fullscreen()
 
 running = True
 while running == True:
+    # Slow down the loop so we don't kill the CPU
+    pygame.time.wait(100)
+    
     screen.blit(cdu_bg, (0,0))
 
     #Debug only print all button outlines
@@ -303,16 +314,6 @@ while running == True:
         pixelRuler.HEIGHT += 1
         pixelRuler.ToClipboard()
 """
-    # Receive new data from DCS
-    while 1:
-        try:
-            data = s.recv(8192)
-            if data:
-                for c in data:
-                    parser.processByte(c)
-        except BaseException as e:
-            #print('Parser Exception: '+ str(e))
-            break;
         
     # Copy data from cdu data array to screen
     for i in range(24*10):
@@ -335,13 +336,32 @@ while running == True:
                     cdu_press(btn.PARAM)
                     if( btn.PARAM == "QUIT" ):
                         running = False
+                        """s.shutdown(1)
+                        s.close()
+                        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                        s.bind(("0.0.0.0", CONNECTION["port"]))
+                        s.settimeout(0)"""
                     else:
                         click_sound.play()
                         pygame.draw.rect(screen, (150,150,150),(btn.X,btn.Y,btn.WIDTH,btn.HEIGHT), 3)
         
     pygame.display.flip()
-    
-    sleep(0.1) #Slow us down a bit
+
+    # Receive new data from DCS
+    while 1:
+        try:
+            data = s.recv(8192)
+            if data:
+                #print('Data: ',end='')
+                for c in data:
+                    #print(c,end='')
+                    parser.processByte(c)
+                #print('')
+            else:
+                print('No Data')
+        except BaseException as e:
+            #print('Parser Exception: '+ str(e))
+            break;
 
 pygame.quit()
 sys.exit()
