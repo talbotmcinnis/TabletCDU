@@ -9,7 +9,6 @@ from time import sleep
 from collections import namedtuple
 from dcsbios import ProtocolParser, StringBuffer, IntegerBuffer
 
-#from ctypes import windll, Structure, c_long, byref
 import struct
 
 class PixelRuler:
@@ -55,6 +54,7 @@ def cdu_press(btn):
     else:
         msg1 = 'CDU_' + btn + ' 1'
         msg2 = 'CDU_' + btn + ' 0'
+        
     s_tx.send(msg1+'\n')
     sleep(0.1)
     s_tx.send(msg2+'\n') 
@@ -269,17 +269,17 @@ parser.write_callbacks.add(update_display)
 
 clock = pygame.time.Clock()
 frame_count = 0
-framerate_max = 45
+looprate_max = 60 # Keep the loop fast to receive DCS data (45hz actual), but only display it at a fraction of that
+display_divider = 4
+display_counter = 0
 
 print('Starting main loop')
 running = True
 while running == True:
     # Slow down the loop so we don't kill the CPU
-    msThisFrame = clock.tick(framerate_max)
+    msThisFrame = clock.tick(looprate_max)
     #print('FPS:' + str(1000/msThisFrame))
-    
-    screen.blit(cdu_bg, (0,0))
-
+  
     #Debug only print all button outlines
     """for btn in cdu_buttons:
         pygame.draw.rect(screen, (0,255,0),(btn.X,btn.Y,btn.WIDTH,btn.HEIGHT), 1)
@@ -313,14 +313,6 @@ while running == True:
         pixelRuler.ToClipboard()
 """
         
-    # Copy data from cdu data array to screen
-    for i in range(24*10):
-        row = i // 24
-        col = i - (row*24)
-        
-        set_char(row, col, chr(cdu_display_data[i]))
-        #print('data{},{}={} []'.format(row,col,format(cdu_display_data[i],'02x'),chr(cdu_display_data[i])))
-
     # PyGame event loop
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -342,8 +334,6 @@ while running == True:
                     else:
                         click_sound.play()
                         pygame.draw.rect(screen, (150,150,150),(btn.X,btn.Y,btn.WIDTH,btn.HEIGHT), 3)
-        
-    pygame.display.flip()
 
     # Receive new data from DCS
     while 1:
@@ -360,6 +350,24 @@ while running == True:
         except BaseException as e:
             #print('Parser Exception: '+ str(e))
             break;
+        
+    # See if its time to display a frame
+    display_counter = display_counter+1
+    if display_counter == display_divider:
+        display_counter = 0
+        #Draw the background
+        screen.blit(cdu_bg, (0,0))
+
+        # Draw the CDU data to the screen
+        for i in range(24*10):
+            row = i // 24
+            col = i - (row*24)
+
+            set_char(row, col, chr(cdu_display_data[i]))
+                
+            #print('data{},{}={} []'.format(row,col,format(cdu_display_data[i],'02x'),chr(cdu_display_data[i])))
+        
+        pygame.display.flip()
 
 pygame.quit()
 sys.exit()
