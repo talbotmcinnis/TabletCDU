@@ -51,10 +51,10 @@ def cdu_press(btn):
     elif(btn == 'PG-'):
         msg1 = 'CDU_PG 0'
         msg2 = 'CDU_PG 1'
-    elif(btn == 'SCROLL_L'):
+    elif(btn == 'SCROLL_R'):
         msg1 = 'CDU_SCROLL 0'
         msg2 = 'CDU_SCROLL 1'
-    elif(btn == 'SCROLL_R'):
+    elif(btn == 'SCROLL_L'):
         msg1 = 'CDU_SCROLL 2'
         msg2 = 'CDU_SCROLL 1'
     else:
