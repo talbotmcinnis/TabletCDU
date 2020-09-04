@@ -51,6 +51,12 @@ def cdu_press(btn):
     elif(btn == 'PG-'):
         msg1 = 'CDU_PG 0'
         msg2 = 'CDU_PG 1'
+    elif(btn == 'SCROLL_L'):
+        msg1 = 'CDU_SCROLL 0'
+        msg2 = 'CDU_SCROLL 1'
+    elif(btn == 'SCROLL_R'):
+        msg1 = 'CDU_SCROLL 2'
+        msg2 = 'CDU_SCROLL 1'
     else:
         msg1 = 'CDU_' + btn + ' 1'
         msg2 = 'CDU_' + btn + ' 0'
@@ -204,7 +210,9 @@ cdu_buttons = [CDUButton(66,531,79,86,'SYS'),
                CDUButton(190,1153,80,91,'MK'),
                CDUButton(65,1153,80,91,'PG-'), ###
                 CDUButton(65,1056,80,91,'PG+'), ###
-               CDUButton(717,1,82,75,'QUIT')
+               CDUButton(717,1,82,75,'QUIT'),
+               CDUButton(284,1153,95,91,'SCROLL_L'),
+               CDUButton(379,1153,95,91,'SCROLL_R')
                ]
 
 # Initialization
