@@ -24,7 +24,7 @@ class PixelRuler:
         self.HEIGHT = height
 
     def ToClipboard(self):
-        pygame.scrap.put(SCRAP_TEXT, ('CDUButton(' + str(self.X) + ',' + str(self.Y) + ',' + str(self.WIDTH) + ',' + str(self.HEIGHT) + ',\'\'),').encode('utf-8'))
+        pygame.scrap.put(SCRAP_TEXT, ('ARC210Button(' + str(self.X) + ',' + str(self.Y) + ',' + str(self.WIDTH) + ',' + str(self.HEIGHT) + ',\'\'),').encode('utf-8'))
 
 def get_subimg(index):
         assert index >= 0 and index <= 63
@@ -33,12 +33,17 @@ def get_subimg(index):
         img = font_img.subsurface(col*64, row*64, 64, 64)
         return img
 
-def set_char(line, column, c):
+def set_cdu_char(line, column, c):
     if c not in font:
         c = b"?"
     screen.blit(font[c], (178+CHARACTER_WIDTH*column, 117+CHARACTER_HEIGHT*line))
 
-def cdu_press(btn):
+def set_arc210_char(line, column, c):
+    if c not in font:
+        c = b"X"
+    screen.blit(font[c], (178+CHARACTER_WIDTH*column, 117+CHARACTER_HEIGHT*line))
+
+def btn_press(btn):
     if(btn == '+'):
         msg1 = 'CDU_DATA 2'
         msg2 = 'CDU_DATA 1'
@@ -63,7 +68,12 @@ def cdu_press(btn):
         
     s_tx.send(msg1+'\n')
     sleep(0.1)
-    s_tx.send(msg2+'\n') 
+    s_tx.send(msg2+'\n')
+
+def rotate_control(control,amount):
+    print('ROT: ' + control + ' ' + `(rotating_last_y-y)`)
+    # TODO: For amount, send INC/DEC commands
+            
 
 # Setup the display callback for when parsed data changes
 def update_display(address, data):
@@ -212,7 +222,37 @@ cdu_buttons = [CDUButton(66,531,79,86,'SYS'),
                 CDUButton(65,1056,80,91,'PG+'), ###
                CDUButton(717,1,82,75,'QUIT'),
                CDUButton(284,1153,95,91,'SCROLL_L'),
-               CDUButton(379,1153,95,91,'SCROLL_R')
+               CDUButton(379,1153,95,91,'SCROLL_R'),
+               CDUButton(1,1,82,75,'TOGGLE'),
+               ]
+
+ARC210Button = namedtuple("ARC210Button", "X Y WIDTH HEIGHT PARAM TYPE")
+arc210_buttons = [
+                ARC210Button(717,1,82,75,'QUIT', 'BTN'),
+                ARC210Button(1,1,82,75,'TOGGLE', 'BTN'),
+
+                ARC210Button(515,205,110,68,'RTSELECT', 'BTN'),
+                ARC210Button(403,205,80,68,'GPS', 'BTN'),
+                ARC210Button(292,205,80,68,'TOD_RCV', 'BTN'),
+                ARC210Button(143,207,80,68,'TOD_SND', 'BTN'),
+                ARC210Button(40,345,97,68,'LSK_1', 'BTN'),
+                ARC210Button(40,473,97,68,'LSK_2', 'BTN'),
+                ARC210Button(40,604,97,68,'LSK_3', 'BTN'),
+                ARC210Button(8,694,61,94,'BRT_INC', 'BTN'),
+                ARC210Button(10,827,57,80,'BRT_DEC', 'BTN'),
+                ARC210Button(603,320,78,93,'SQL_OFF', 'BTN'),
+                ARC210Button(685,320,78,93,'SQL_ON', 'BTN'),
+                ARC210Button(718,465,68,90,'AM_FM', 'BTN'),
+                ARC210Button(715,600,71,95,'OFFSET_RCV', 'BTN'),
+                ARC210Button(611,600,71,95,'XMT_RCV_SND', 'BTN'),
+                ARC210Button(612,467,71,95,'MENU_TIME', 'BTN'),
+                ARC210Button(724,723,63,173,'ENTER', 'BTN'),
+                ARC210Button(91,752,88,104,'FREQ_X00_MHZ', 'ROT'),
+                ARC210Button(222,752,92,104,'FREQ_X0_MHZ', 'ROT'),
+                ARC210Button(354,752,85,104,'FREQ_X_MHZ', 'ROT'),
+                ARC210Button(488,752,85,104,'FREQ_X00_KHZ', 'ROT'),
+                ARC210Button(617,744,85,104,'FREQ_0XXKHZ', 'ROT'),
+                ARC210Button(345,897,101,117,'CHANNEL', 'ROT'),
                ]
 
 # Initialization
@@ -243,16 +283,24 @@ pygame.init()
 pygame.mixer.init()
 
 cdu_display_data = bytearray(24*10)
+arc210_display_data = bytearray(24*10)
+
+mode = "cdu"
 
 size = width, height = 800, 1280
-screen = pygame.display.set_mode(size, pygame.DOUBLEBUF | pygame.NOFRAME | pygame.FULLSCREEN, 32)
-# | pygame.FULLSCREEN
+screen = pygame.display.set_mode(size, pygame.DOUBLEBUF , 32)
+# | pygame.NOFRAME | pygame.FULLSCREEN
 
 #Loading
 font_img = pygame.image.load("font_A-10_CDU.tga")  # 512x512 pixel, 8x8 characters
+
 cdu_bg = pygame.image.load("cdu_bg.bmp")
 cdu_bg = pygame.transform.scale(cdu_bg, (width,height))
-cdu_bg_rect = cdu_bg.get_rect()
+
+arc210_bg = pygame.image.load("arc-210_bg.bmp")
+arc210_bg = pygame.transform.scale(arc210_bg, (width,height))
+
+#cdu_bg_rect = cdu_bg.get_rect()
 
 click_sound = pygame.mixer.Sound("click.wav")
 
@@ -270,10 +318,8 @@ for k in pos_map.keys():
 parser = ProtocolParser()
 parser.write_callbacks.add(update_display)
 
-#pygame.scrap.init()
-#pixelRuler = PixelRuler(500,00,82,104)
-
-#pygame.display.toggle_fullscreen()
+pygame.scrap.init()
+pixelRuler = PixelRuler(50,900,82,104)
 
 clock = pygame.time.Clock()
 frame_count = 0
@@ -283,65 +329,59 @@ display_counter = 0
 
 print('Starting main loop')
 running = True
+rotating_control = 0
+rotating_last_y = 0
 while running == True:
     # Slow down the loop so we don't kill the CPU
     msThisFrame = clock.tick(looprate_max)
     #print('FPS:' + str(1000/msThisFrame))
   
-    #Debug only print all button outlines
-    """for btn in cdu_buttons:
-        pygame.draw.rect(screen, (0,255,0),(btn.X,btn.Y,btn.WIDTH,btn.HEIGHT), 1)
-    pygame.draw.rect(screen, (255,0,0),(pixelRuler.X,pixelRuler.Y,pixelRuler.WIDTH,pixelRuler.HEIGHT), 1)
-
-    # Debug print the pixel ruler
-    keys = pygame.key.get_pressed()
-    if keys[pygame.K_LEFT]:
-        pixelRuler.X -= 1
-        pixelRuler.ToClipboard()
-    elif keys[pygame.K_RIGHT]:
-        pixelRuler.X += 1
-        pixelRuler.ToClipboard()
-    if keys[pygame.K_UP]:
-        pixelRuler.Y -= 1
-        pixelRuler.ToClipboard()
-    if keys[pygame.K_DOWN]:
-        pixelRuler.Y += 1;
-        pixelRuler.ToClipboard()
-    if keys[pygame.K_a]:
-        pixelRuler.WIDTH -= 1
-        pixelRuler.ToClipboard()
-    if keys[pygame.K_d]:
-        pixelRuler.WIDTH += 1
-        pixelRuler.ToClipboard()
-    if keys[pygame.K_w]:
-        pixelRuler.HEIGHT -= 1
-        pixelRuler.ToClipboard()
-    if keys[pygame.K_s]:
-        pixelRuler.HEIGHT += 1
-        pixelRuler.ToClipboard()
-"""
-        
     # PyGame event loop
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+        elif( rotating_control != 0 ):
+            x,y = pygame.mouse.get_pos()
+            rotate_control(rotating_control, rotating_last_y-y)
+            rotating_last_y = y
+        elif( event.type is MOUSEBUTTONUP ):
+            rotating_control = 0
         elif( event.type is MOUSEBUTTONDOWN ):
             pos = pygame.mouse.get_pos()
             x,y = pos
-            for btn in cdu_buttons:
-                if( x >= btn.X and x < (btn.X+btn.WIDTH) and y >= btn.Y and (y < btn.Y+btn.HEIGHT) ):
-                    print(btn.PARAM)
-                    cdu_press(btn.PARAM)
-                    if( btn.PARAM == "QUIT" ):
-                        running = False
-                        """s.shutdown(1)
-                        s.close()
-                        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                        s.bind(("0.0.0.0", CONNECTION["port"]))
-                        s.settimeout(0)"""
-                    else:
-                        click_sound.play()
-                        pygame.draw.rect(screen, (150,150,150),(btn.X,btn.Y,btn.WIDTH,btn.HEIGHT), 3)
+            if mode == "arc210":
+                for btn in arc210_buttons:
+                    if( x >= btn.X and x < (btn.X+btn.WIDTH) and y >= btn.Y and (y < btn.Y+btn.HEIGHT) ):
+                        
+                        if( btn.TYPE == 'ROT' ):
+                            print('Start ROT: ' + btn.PARAM)
+                            rotating_control = btn.PARAM
+                            rotating_last_y = y
+                            click_sound.play()
+                        else:
+                            print('Click: ' + btn.PARAM)
+                            btn_press(btn.PARAM)
+                            if( btn.PARAM == "QUIT" ):
+                                running = False
+                            elif( btn.PARAM == "TOGGLE" ):
+                                mode = "cdu"
+                            else:
+                                click_sound.play()
+                                pygame.draw.rect(screen, (150,150,150),(btn.X,btn.Y,btn.WIDTH,btn.HEIGHT), 3)
+            
+            elif( mode == "cdu"):
+                for btn in cdu_buttons:
+                    if( x >= btn.X and x < (btn.X+btn.WIDTH) and y >= btn.Y and (y < btn.Y+btn.HEIGHT) ):
+                        print(btn.PARAM)
+                        btn_press(btn.PARAM)
+                        if( btn.PARAM == "QUIT" ):
+                            running = False
+                        elif( btn.PARAM == "TOGGLE" ):
+                            mode = "arc210"
+                        else:
+                            click_sound.play()
+                            pygame.draw.rect(screen, (150,150,150),(btn.X,btn.Y,btn.WIDTH,btn.HEIGHT), 3)
+                                      
 
     # Receive new data from DCS
     while 1:
@@ -364,16 +404,55 @@ while running == True:
     if display_counter == display_divider:
         display_counter = 0
         #Draw the background
-        screen.blit(cdu_bg, (0,0))
+        screen.blit(arc210_bg if mode == "arc210" else cdu_bg, (0,0))
 
-        # Draw the CDU data to the screen
-        for i in range(24*10):
-            row = i // 24
-            col = i - (row*24)
+        # Draw the screen data
+        if mode=="arc210":
+            for i in range(24*10):
+                row = i // 24
+                col = i - (row*24)
 
-            set_char(row, col, chr(cdu_display_data[i]))
-                
-            #print('data{},{}={} []'.format(row,col,format(cdu_display_data[i],'02x'),chr(cdu_display_data[i])))
+                set_arc210_char(row, col, chr(arc210_display_data[i]))
+        else:
+            for i in range(24*10):
+                row = i // 24
+                col = i - (row*24)
+
+                set_cdu_char(row, col, chr(cdu_display_data[i]))
+                    
+                #print('data{},{}={} []'.format(row,col,format(cdu_display_data[i],'02x'),chr(cdu_display_data[i])))
+
+        #Debug only print all button outlines
+        for btn in arc210_buttons:
+            pygame.draw.rect(screen, (0,255,0),(btn.X,btn.Y,btn.WIDTH,btn.HEIGHT), 1)
+        pygame.draw.rect(screen, (255,0,0),(pixelRuler.X,pixelRuler.Y,pixelRuler.WIDTH,pixelRuler.HEIGHT), 1)
+
+        # Debug print the pixel ruler
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_LEFT]:
+            pixelRuler.X -= 1
+            pixelRuler.ToClipboard()
+        elif keys[pygame.K_RIGHT]:
+            pixelRuler.X += 1
+            pixelRuler.ToClipboard()
+        if keys[pygame.K_UP]:
+            pixelRuler.Y -= 1
+            pixelRuler.ToClipboard()
+        if keys[pygame.K_DOWN]:
+            pixelRuler.Y += 1;
+            pixelRuler.ToClipboard()
+        if keys[pygame.K_a]:
+            pixelRuler.WIDTH -= 1
+            pixelRuler.ToClipboard()
+        if keys[pygame.K_d]:
+            pixelRuler.WIDTH += 1
+            pixelRuler.ToClipboard()
+        if keys[pygame.K_w]:
+            pixelRuler.HEIGHT -= 1
+            pixelRuler.ToClipboard()
+        if keys[pygame.K_s]:
+            pixelRuler.HEIGHT += 1
+            pixelRuler.ToClipboard()
         
         pygame.display.flip()
 
