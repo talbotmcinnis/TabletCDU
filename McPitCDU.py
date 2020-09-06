@@ -1,7 +1,7 @@
 #!python2
 from __future__ import print_function
 
-import sys, pygame
+import sys, pygame, math
 
 import socket
 from pygame.locals import *
@@ -24,7 +24,7 @@ class PixelRuler:
         self.HEIGHT = height
 
     def ToClipboard(self):
-        pygame.scrap.put(SCRAP_TEXT, ('ARC210Button(' + str(self.X) + ',' + str(self.Y) + ',' + str(self.WIDTH) + ',' + str(self.HEIGHT) + ',\'\'),').encode('utf-8'))
+        pygame.scrap.put(SCRAP_TEXT, ('Control(' + str(self.X) + ',' + str(self.Y) + ',' + str(self.WIDTH) + ',' + str(self.HEIGHT) + ',\'\',\'BTN\'),').encode('utf-8'))
 
 def get_subimg(index):
         assert index >= 0 and index <= 63
@@ -41,7 +41,7 @@ def set_cdu_char(line, column, c):
 def set_arc210_char(line, column, c):
     if c not in font:
         c = b"X"
-    screen.blit(font[c], (178+CHARACTER_WIDTH*column, 117+CHARACTER_HEIGHT*line))
+    screen.blit(font[c], (205+CHARACTER_WIDTH*column, 365+CHARACTER_HEIGHT*line))
 
 def btn_press(btn):
     if(btn == '+'):
@@ -62,30 +62,50 @@ def btn_press(btn):
     elif(btn == 'SCROLL_R'):
         msg1 = 'CDU_SCROLL 2'
         msg2 = 'CDU_SCROLL 1'
+    elif(btn == 'TOGGLE'):
+        return
     else:
-        msg1 = 'CDU_' + btn + ' 1'
-        msg2 = 'CDU_' + btn + ' 0'
-        
+        if mode == 'ARC210':
+            msg1 = 'ARC210_' + btn + ' 1'
+            msg2 = 'ARC210_' + btn + ' 0'
+        else:
+            msg1 = 'CDU_' + btn + ' 1'
+            msg2 = 'CDU_' + btn + ' 0'
+
+    click_sound.play()
+    pygame.draw.rect(screen, (150,150,150),(ctl.X,ctl.Y,ctl.WIDTH,ctl.HEIGHT), 3)   # Apply a little click effect
+    
+    print('Sending'+msg1);
     s_tx.send(msg1+'\n')
     sleep(0.1)
     s_tx.send(msg2+'\n')
 
 def rotate_control(control,amount):
-    print('ROT: ' + control + ' ' + `(rotating_last_y-y)`)
+    print('ROT: ' + control.PARAM + ' ' + `(rotating_last_y-y)`)
     # TODO: For amount, send INC/DEC commands
-            
 
+def select_control(control,angle):
+    print( 'MOVING SELECTOR: ' + control.PARAM + ' Angle=' + `angle`)
+    # TODO: Send the command that matches the angle
+                        
 # Setup the display callback for when parsed data changes
 def update_display(address, data):
         #print('Parser update {}={}'.format(address,data))
-        if address < CDUDISPLAY_START_ADDRESS or address >= CDUDISPLAY_START_ADDRESS + 10*24:
-            #print('bad addr');
-            return
-        
-        offset = address - CDUDISPLAY_START_ADDRESS
-        data_bytes = struct.pack("<H", data)
-        cdu_display_data[offset] = data_bytes[0]
-        cdu_display_data[offset+1] = data_bytes[1]
+        if mode == 'arc210':
+            # TODO: Receive the SEL mode positions and rotate their knob accordingly
+            
+            if address >= ARC210DISPLAY_START_ADDRESS and address < ARC210DISPLAY_START_ADDRESS + 10*24: # TODO: ARC210 max?
+                offset = address - ARC210DISPLAY_START_ADDRESS
+                data_bytes = struct.pack("<H", data)
+                arc210_display_data[offset] = data_bytes[0]
+                arc210_display_data[offset+1] = data_bytes[1]
+
+        else:
+            if address >= CDUDISPLAY_START_ADDRESS and address < CDUDISPLAY_START_ADDRESS + 10*24:
+                offset = address - CDUDISPLAY_START_ADDRESS
+                data_bytes = struct.pack("<H", data)
+                cdu_display_data[offset] = data_bytes[0]
+                cdu_display_data[offset+1] = data_bytes[1]
 
 # Constants
 CDU_COLOR = (0, 255, 0)
@@ -93,6 +113,7 @@ CHARACTER_SIZE = 21
 CHARACTER_WIDTH = 18
 CHARACTER_HEIGHT = 36
 CDUDISPLAY_START_ADDRESS = 0x11c0
+ARC210DISPLAY_START_ADDRESS = 0x11c0 # TODO
 
 pos_map = {
         chr(0xA9):0, # SYS_ACTION / "bullseye"
@@ -158,101 +179,102 @@ pos_map = {
 
 font = {}
 
-CDUButton = namedtuple("CDUButton", "X Y WIDTH HEIGHT PARAM")
-cdu_buttons = [CDUButton(66,531,79,86,'SYS'),
-               CDUButton(149,531,79,86,'NAV'),
-               CDUButton(232,531,79,86,'WP'),
-               CDUButton(318,530,79,86,'OSET'),
-               CDUButton(396,530,79,86,'FPM'),
-               CDUButton(482,531,79,86,'PREV'),
-               CDUButton(298,638,80,92,'A'),
-               CDUButton(379,638,80,92,'B'),
-               CDUButton(457,638,80,92,'C'),
-               CDUButton(538,638,80,92,'D'),
-               CDUButton(619,638,80,92,'E'),
-               CDUButton(700,638,80,92,'F'),
-               CDUButton(298,738,79,103,'G'),
-               CDUButton(379,738,79,103,'H'),
-               CDUButton(458,738,79,103,'I'),
-               CDUButton(539,738,79,103,'J'),
-               CDUButton(620,738,79,103,'K'),
-               CDUButton(702,738,79,103,'L'),
-               CDUButton(298,845,79,89,'M'),
-               CDUButton(379,845,79,89,'N'),
-               CDUButton(460,845,79,89,'O'),
-               CDUButton(540,845,79,86,'P'),
-               CDUButton(621,845,79,86,'Q'),
-               CDUButton(703,845,79,86,'R'),
-               CDUButton(297,944,79,93,'S'),
-               CDUButton(379,944,79,93,'T'),
-               CDUButton(461,944,79,93,'U'),
-               CDUButton(540,944,79,93,'V'),
-               CDUButton(620,944,79,93,'W'),
-               CDUButton(703,944,79,92,'X'),
-               CDUButton(188,944,93,98,'SLASH'),
-               CDUButton(2,944,93,98,'POINT'),
-               CDUButton(13,632,82,104,'1'),
-               CDUButton(102,632,82,104,'2'),
-               CDUButton(188,632,82,104,'3'),
-               CDUButton(14,736,82,104,'4'),
-               CDUButton(101,736,82,104,'5'),
-               CDUButton(188,736,82,104,'6'),
-               CDUButton(14,839,82,104,'7'),
-               CDUButton(99,839,82,104,'8'),
-               CDUButton(188,839,82,104,'9'),
-               CDUButton(99,944,82,104,'0'),
-               CDUButton(46,163,118,70,'LSK_3L'),
-               CDUButton(46,234,118,70,'LSK_5L'),
-               CDUButton(46,303,118,67,'LSK_7L'),
-               CDUButton(46,374,118,67,'LSK_9L'),
-               CDUButton(631,163,118,70,'LSK_3R'),
-               CDUButton(631,234,118,70,'LSK_5R'),
-               CDUButton(631,303,118,67,'LSK_7R'),
-               CDUButton(631,374,118,67,'LSK_9R'),
-               CDUButton(316,1047,82,104,'BCK'),
-               CDUButton(402,1047,82,104,'SPC'),
-               CDUButton(485,1047,77,104,'Y'),
-               CDUButton(564,1047,77,104,'Z'),
-               CDUButton(656,1058,72,89,'+'),   ###
-               CDUButton(656,1152,72,89,'-'),   ###
-               CDUButton(566,1155,72,104,'FA'),
-               CDUButton(483,1153,80,91,'CLR'),
-               CDUButton(190,1153,80,91,'MK'),
-               CDUButton(65,1153,80,91,'PG-'), ###
-                CDUButton(65,1056,80,91,'PG+'), ###
-               CDUButton(717,1,82,75,'QUIT'),
-               CDUButton(284,1153,95,91,'SCROLL_L'),
-               CDUButton(379,1153,95,91,'SCROLL_R'),
-               CDUButton(1,1,82,75,'TOGGLE'),
+Control = namedtuple("Control", "X Y WIDTH HEIGHT PARAM TYPE")
+cdu_controls = [Control(66,531,79,86,'SYS', 'BTN'),
+               Control(149,531,79,86,'NAV', 'BTN'),
+               Control(232,531,79,86,'WP', 'BTN'),
+               Control(318,530,79,86,'OSET', 'BTN'),
+               Control(396,530,79,86,'FPM', 'BTN'),
+               Control(482,531,79,86,'PREV', 'BTN'),
+               Control(298,638,80,92,'A', 'BTN'),
+               Control(379,638,80,92,'B', 'BTN'),
+               Control(457,638,80,92,'C', 'BTN'),
+               Control(538,638,80,92,'D', 'BTN'),
+               Control(619,638,80,92,'E', 'BTN'),
+               Control(700,638,80,92,'F', 'BTN'),
+               Control(298,738,79,103,'G', 'BTN'),
+               Control(379,738,79,103,'H', 'BTN'),
+               Control(458,738,79,103,'I', 'BTN'),
+               Control(539,738,79,103,'J', 'BTN'),
+               Control(620,738,79,103,'K', 'BTN'),
+               Control(702,738,79,103,'L', 'BTN'),
+               Control(298,845,79,89,'M', 'BTN'),
+               Control(379,845,79,89,'N', 'BTN'),
+               Control(460,845,79,89,'O', 'BTN'),
+               Control(540,845,79,86,'P', 'BTN'),
+               Control(621,845,79,86,'Q', 'BTN'),
+               Control(703,845,79,86,'R', 'BTN'),
+               Control(297,944,79,93,'S', 'BTN'),
+               Control(379,944,79,93,'T', 'BTN'),
+               Control(461,944,79,93,'U', 'BTN'),
+               Control(540,944,79,93,'V', 'BTN'),
+               Control(620,944,79,93,'W', 'BTN'),
+               Control(703,944,79,92,'X', 'BTN'),
+               Control(188,944,93,98,'SLASH', 'BTN'),
+               Control(2,944,93,98,'POINT', 'BTN'),
+               Control(13,632,82,104,'1', 'BTN'),
+               Control(102,632,82,104,'2', 'BTN'),
+               Control(188,632,82,104,'3', 'BTN'),
+               Control(14,736,82,104,'4', 'BTN'),
+               Control(101,736,82,104,'5', 'BTN'),
+               Control(188,736,82,104,'6', 'BTN'),
+               Control(14,839,82,104,'7', 'BTN'),
+               Control(99,839,82,104,'8', 'BTN'),
+               Control(188,839,82,104,'9', 'BTN'),
+               Control(99,944,82,104,'0', 'BTN'),
+               Control(46,163,118,70,'LSK_3L', 'BTN'),
+               Control(46,234,118,70,'LSK_5L', 'BTN'),
+               Control(46,303,118,67,'LSK_7L', 'BTN'),
+               Control(46,374,118,67,'LSK_9L', 'BTN'),
+               Control(631,163,118,70,'LSK_3R', 'BTN'),
+               Control(631,234,118,70,'LSK_5R', 'BTN'),
+               Control(631,303,118,67,'LSK_7R', 'BTN'),
+               Control(631,374,118,67,'LSK_9R', 'BTN'),
+               Control(316,1047,82,104,'BCK', 'BTN'),
+               Control(402,1047,82,104,'SPC', 'BTN'),
+               Control(485,1047,77,104,'Y', 'BTN'),
+               Control(564,1047,77,104,'Z', 'BTN'),
+               Control(656,1058,72,89,'+', 'BTN'),
+               Control(656,1152,72,89,'-', 'BTN'),
+               Control(566,1155,72,104,'FA', 'BTN'),
+               Control(483,1153,80,91,'CLR', 'BTN'),
+               Control(190,1153,80,91,'MK', 'BTN'),
+               Control(65,1153,80,91,'PG-', 'BTN'),
+               Control(65,1056,80,91,'PG+', 'BTN'),
+               Control(717,1,82,75,'QUIT', 'BTN'),
+               Control(284,1153,95,91,'SCROLL_L', 'BTN'),
+               Control(379,1153,95,91,'SCROLL_R', 'BTN'),
+               Control(1,1,82,75,'TOGGLE', 'BTN'),
                ]
 
-ARC210Button = namedtuple("ARC210Button", "X Y WIDTH HEIGHT PARAM TYPE")
-arc210_buttons = [
-                ARC210Button(717,1,82,75,'QUIT', 'BTN'),
-                ARC210Button(1,1,82,75,'TOGGLE', 'BTN'),
+arc210_controls = [
+                Control(717,1,82,75,'QUIT', 'BTN'),
+                Control(1,1,82,75,'TOGGLE', 'BTN'),
 
-                ARC210Button(515,205,110,68,'RTSELECT', 'BTN'),
-                ARC210Button(403,205,80,68,'GPS', 'BTN'),
-                ARC210Button(292,205,80,68,'TOD_RCV', 'BTN'),
-                ARC210Button(143,207,80,68,'TOD_SND', 'BTN'),
-                ARC210Button(40,345,97,68,'LSK_1', 'BTN'),
-                ARC210Button(40,473,97,68,'LSK_2', 'BTN'),
-                ARC210Button(40,604,97,68,'LSK_3', 'BTN'),
-                ARC210Button(8,694,61,94,'BRT_INC', 'BTN'),
-                ARC210Button(10,827,57,80,'BRT_DEC', 'BTN'),
-                ARC210Button(603,320,78,93,'SQL_OFF', 'BTN'),
-                ARC210Button(685,320,78,93,'SQL_ON', 'BTN'),
-                ARC210Button(718,465,68,90,'AM_FM', 'BTN'),
-                ARC210Button(715,600,71,95,'OFFSET_RCV', 'BTN'),
-                ARC210Button(611,600,71,95,'XMT_RCV_SND', 'BTN'),
-                ARC210Button(612,467,71,95,'MENU_TIME', 'BTN'),
-                ARC210Button(724,723,63,173,'ENTER', 'BTN'),
-                ARC210Button(91,752,88,104,'FREQ_X00_MHZ', 'ROT'),
-                ARC210Button(222,752,92,104,'FREQ_X0_MHZ', 'ROT'),
-                ARC210Button(354,752,85,104,'FREQ_X_MHZ', 'ROT'),
-                ARC210Button(488,752,85,104,'FREQ_X00_KHZ', 'ROT'),
-                ARC210Button(617,744,85,104,'FREQ_0XXKHZ', 'ROT'),
-                ARC210Button(345,897,101,117,'CHANNEL', 'ROT'),
+                Control(515,205,110,68,'RTSELECT', 'BTN'),
+                Control(403,205,80,68,'GPS', 'BTN'),
+                Control(292,205,80,68,'TOD_RCV', 'BTN'),
+                Control(143,207,80,68,'TOD_SND', 'BTN'),
+                Control(40,345,97,68,'LSK_1', 'BTN'),
+                Control(40,473,97,68,'LSK_2', 'BTN'),
+                Control(40,604,97,68,'LSK_3', 'BTN'),
+                Control(8,694,61,94,'BRT_INC', 'BTN'),
+                Control(10,827,57,80,'BRT_DEC', 'BTN'),
+                Control(718,465,68,90,'AM_FM', 'BTN'),
+                Control(715,600,71,95,'OFFSET_RCV', 'BTN'),
+                Control(611,600,71,95,'XMT_RCV_SND', 'BTN'),
+                Control(612,467,71,95,'MENU_TIME', 'BTN'),
+                Control(724,723,63,173,'ENTER', 'BTN'),
+                Control(91,752,88,104,'FREQ_X00_MHZ', 'ROT'),
+                Control(222,752,92,104,'FREQ_X0_MHZ', 'ROT'),
+                Control(354,752,85,104,'FREQ_X_MHZ', 'ROT'),
+                Control(488,752,85,104,'FREQ_X00_KHZ', 'ROT'),
+                Control(617,744,85,104,'FREQ_0XXKHZ', 'ROT'),
+                Control(345,897,101,117,'CHANNEL', 'ROT'),
+
+                Control(153,900,103,125,'ARC210_LEFT_MODE', 'SEL'),
+                Control(543,892,103,125,'ARC210_RIGHT_MODE', 'SEL'),
+                Control(640,329,90,87,'SQUELCH', 'SEL'),
                ]
 
 # Initialization
@@ -268,14 +290,15 @@ CONNECTION = {
 print ('Waiting to connect...')
 
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-s.bind(("0.0.0.0", 7779))
 s.settimeout(0)
+#s.bind(("0.0.0.0", 7779)) # Todo: put these back in for production
+
 
 print('Connected.  Opening outbound socket')
 
 s_tx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-s_tx.connect((CONNECTION["host"], 7778))
 s_tx.settimeout(0)
+#s_tx.connect((CONNECTION["host"], 7778)) # Todo: put these back in for production
 
 print('Connected.')
 
@@ -289,7 +312,7 @@ mode = "cdu"
 
 size = width, height = 800, 1280
 screen = pygame.display.set_mode(size, pygame.DOUBLEBUF , 32)
-# | pygame.NOFRAME | pygame.FULLSCREEN
+# | pygame.NOFRAME | pygame.FULLSCREEN  # Todo: put these back in for production
 
 #Loading
 font_img = pygame.image.load("font_A-10_CDU.tga")  # 512x512 pixel, 8x8 characters
@@ -300,10 +323,18 @@ cdu_bg = pygame.transform.scale(cdu_bg, (width,height))
 arc210_bg = pygame.image.load("arc-210_bg.bmp")
 arc210_bg = pygame.transform.scale(arc210_bg, (width,height))
 
+rotator_img = pygame.image.load("rotator.png")
+rotator_img = pygame.transform.scale(rotator_img, (90,90))
+
+squelch_img = pygame.image.load("squelch_knob.png")
+squelch_img = pygame.transform.scale(squelch_img, (70,70))
+
+
 #cdu_bg_rect = cdu_bg.get_rect()
 
 click_sound = pygame.mixer.Sound("click.wav")
 
+# MAP the font into individual charaters
 for k in pos_map.keys():
         img = get_subimg(pos_map[k])
         for x in range(64):
@@ -319,7 +350,7 @@ parser = ProtocolParser()
 parser.write_callbacks.add(update_display)
 
 pygame.scrap.init()
-pixelRuler = PixelRuler(50,900,82,104)
+#pixelRuler = PixelRuler(650,400,82,104)
 
 clock = pygame.time.Clock()
 frame_count = 0
@@ -329,8 +360,10 @@ display_counter = 0
 
 print('Starting main loop')
 running = True
-rotating_control = 0
+rotating_control = None
 rotating_last_y = 0
+selector_initial_xy = (0,0)
+
 while running == True:
     # Slow down the loop so we don't kill the CPU
     msThisFrame = clock.tick(looprate_max)
@@ -340,49 +373,61 @@ while running == True:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
-        elif( rotating_control != 0 ):
+        elif( event.type is MOUSEMOTION ):
+            if rotating_control is not None:
+                if rotating_control.TYPE == 'SEL':
+                    x,y = pygame.mouse.get_pos()
+                    sel_x, sel_y = selector_initial_xy;
+                    dx = x - sel_x
+                    dy = y - sel_y
+                    magnitude = abs(math.sqrt(dx*dx + dy*dy))
+                    if( magnitude > 75 ):
+                        angle = 0
+                        if dx == 0 :
+                            if dy >= 0:
+                                angle = 0
+                            else:
+                                angle = 180
+                        else:
+                            angle = math.degrees(math.atan(dy/float(dx)))
+                            if dx > 0:
+                                angle += 90
+                            else:
+                                angle += 270
+
+                        select_control(rotating_control, angle)                        
+        elif( event.type is MOUSEBUTTONUP ):
+            rotating_control = None
+            #print( 'MOUSEBUTTONUP' )
+        elif( rotating_control is not None ):
             x,y = pygame.mouse.get_pos()
             rotate_control(rotating_control, rotating_last_y-y)
             rotating_last_y = y
-        elif( event.type is MOUSEBUTTONUP ):
-            rotating_control = 0
         elif( event.type is MOUSEBUTTONDOWN ):
             pos = pygame.mouse.get_pos()
             x,y = pos
-            if mode == "arc210":
-                for btn in arc210_buttons:
-                    if( x >= btn.X and x < (btn.X+btn.WIDTH) and y >= btn.Y and (y < btn.Y+btn.HEIGHT) ):
+            activeControls = arc210_controls if mode == 'arc210' else cdu_controls
                         
-                        if( btn.TYPE == 'ROT' ):
-                            print('Start ROT: ' + btn.PARAM)
-                            rotating_control = btn.PARAM
-                            rotating_last_y = y
-                            click_sound.play()
-                        else:
-                            print('Click: ' + btn.PARAM)
-                            btn_press(btn.PARAM)
-                            if( btn.PARAM == "QUIT" ):
-                                running = False
-                            elif( btn.PARAM == "TOGGLE" ):
-                                mode = "cdu"
-                            else:
-                                click_sound.play()
-                                pygame.draw.rect(screen, (150,150,150),(btn.X,btn.Y,btn.WIDTH,btn.HEIGHT), 3)
-            
-            elif( mode == "cdu"):
-                for btn in cdu_buttons:
-                    if( x >= btn.X and x < (btn.X+btn.WIDTH) and y >= btn.Y and (y < btn.Y+btn.HEIGHT) ):
-                        print(btn.PARAM)
-                        btn_press(btn.PARAM)
-                        if( btn.PARAM == "QUIT" ):
+            for ctl in activeControls:
+                if( x >= ctl.X and x < (ctl.X+ctl.WIDTH) and y >= ctl.Y and (y < ctl.Y+ctl.HEIGHT) ):
+                    if( ctl.TYPE == 'ROT' ):
+                        print('Start ROT: ' + ctl.PARAM)
+                        rotating_control = ctl
+                        rotating_last_y = y
+                        click_sound.play()
+                    elif( ctl.TYPE == 'SEL' ):
+                        print('Start SEL: ' + ctl.PARAM)
+                        rotating_control = ctl
+                        selector_initial_xy = pos
+                    else:
+                        if( ctl.PARAM == "QUIT" ):
                             running = False
-                        elif( btn.PARAM == "TOGGLE" ):
-                            mode = "arc210"
+                        elif( ctl.PARAM == "TOGGLE" ):
+                            mode = "cdu" if mode == 'arc210' else 'arc210'
                         else:
-                            click_sound.play()
-                            pygame.draw.rect(screen, (150,150,150),(btn.X,btn.Y,btn.WIDTH,btn.HEIGHT), 3)
-                                      
-
+                            btn_press(ctl.PARAM)
+                    break
+            
     # Receive new data from DCS
     while 1:
         try:
@@ -413,6 +458,18 @@ while running == True:
                 col = i - (row*24)
 
                 set_arc210_char(row, col, chr(arc210_display_data[i]))
+
+            left_knob_image = pygame.transform.rotate(rotator_img, -45)
+            left_knob_width,left_knob_height = left_knob_image.get_size()
+            screen.blit(left_knob_image, (206 - (left_knob_width/2),961 - (left_knob_height/2)))
+
+            right_knob_image = pygame.transform.rotate(rotator_img, -90)
+            right_knob_width,right_knob_height = right_knob_image.get_size()
+            screen.blit(right_knob_image, (594 - (right_knob_width/2),956 - (right_knob_height/2)))
+
+            squelch_knob_image = pygame.transform.rotate(squelch_img, -22.5)
+            squelch_knob_width,squelch_knob_height = squelch_knob_image.get_size()
+            screen.blit(squelch_knob_image, (684 - (squelch_knob_width/2),366 + 7 - (squelch_knob_height/2)))
         else:
             for i in range(24*10):
                 row = i // 24
@@ -421,9 +478,9 @@ while running == True:
                 set_cdu_char(row, col, chr(cdu_display_data[i]))
                     
                 #print('data{},{}={} []'.format(row,col,format(cdu_display_data[i],'02x'),chr(cdu_display_data[i])))
-
+"""
         #Debug only print all button outlines
-        for btn in arc210_buttons:
+        for btn in arc210_controls:
             pygame.draw.rect(screen, (0,255,0),(btn.X,btn.Y,btn.WIDTH,btn.HEIGHT), 1)
         pygame.draw.rect(screen, (255,0,0),(pixelRuler.X,pixelRuler.Y,pixelRuler.WIDTH,pixelRuler.HEIGHT), 1)
 
@@ -453,7 +510,8 @@ while running == True:
         if keys[pygame.K_s]:
             pixelRuler.HEIGHT += 1
             pixelRuler.ToClipboard()
-        
+"""
+
         pygame.display.flip()
 
 pygame.quit()
