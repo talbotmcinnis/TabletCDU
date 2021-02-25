@@ -8,13 +8,13 @@ from pygame.locals import *
 import struct
 
 class BitmapFontScreen:
-    CHARACTER_COLOR = (0,0,0)
-    CHARACTER_SIZE = 21
-    CHARACTER_WIDTH = 18
-    CHARACTER_HEIGHT = 36  # not static 
-    SCREEN_X = 0
-    SCREEN_Y = 0
-    SCREEN = {}
+    #CHARACTER_COLOR = (0,0,0)
+    #CHARACTER_SIZE = 21
+    #CHARACTER_WIDTH = 18
+    #CHARACTER_HEIGHT = 36  # not static 
+    #SCREEN_X = 0
+    #SCREEN_Y = 0
+    #SCREEN = {}
     
     pos_map = {
         chr(0xA9):0, # SYS_ACTION / "bullseye"
@@ -78,14 +78,18 @@ class BitmapFontScreen:
         chr(0xB0):58  # degree
         }
 
-    font = {}
-    font_img = {}
+    #font = {}
+    #font_img = {}
     
     def __init__(self, screen, screenX, screenY, charColor):
         self.SCREEN = screen
         self.SCREEN_X = screenX
         self.SCREEN_Y = screenY
+        self.CHARACTER_SIZE = 21
+        self.CHARACTER_WIDTH = 18
+        self.CHARACTER_HEIGHT = 36
         self.CHARACTER_COLOR = charColor
+        self.font = {}
         self.font_img = pygame.image.load("font_A-10_CDU.tga")  # 512x512 pixel, 8x8 characters
 
         # MAP the font into individual charaters
