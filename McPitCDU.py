@@ -9,39 +9,11 @@ from time import sleep
 from collections import namedtuple
 from dcsbios import ProtocolParser, StringBuffer, IntegerBuffer
 
+from pixelruler import PixelRuler
+from textscreenbuffer import TextScreenBuffer
+from bitmapfontscreen import BitmapFontScreen
+
 import struct
-
-class PixelRuler:
-    X = 0
-    Y = 0
-    WIDTH = 50
-    HEIGHT = 50
-
-    def __init__(self, x,y,width,height):
-        self.X = x
-        self.Y = y
-        self.WIDTH = width
-        self.HEIGHT = height
-
-    def ToClipboard(self):
-        pygame.scrap.put(SCRAP_TEXT, ('Control(' + str(self.X) + ',' + str(self.Y) + ',' + str(self.WIDTH) + ',' + str(self.HEIGHT) + ',\'\',\'BTN\'),').encode('utf-8'))
-
-def get_subimg(index):
-        assert index >= 0 and index <= 63
-        row = index // 8
-        col = index - row*8
-        img = font_img.subsurface(col*64, row*64, 64, 64)
-        return img
-
-def set_cdu_char(line, column, c):
-    if c not in font:
-        c = b"?"
-    screen.blit(font[c], (178+CHARACTER_WIDTH*column, 117+CHARACTER_HEIGHT*line))
-
-def set_arc210_char(line, column, c):
-    if c not in font:
-        c = b"X"
-    screen.blit(font[c], (205+CHARACTER_WIDTH*column, 365+CHARACTER_HEIGHT*line))
 
 def btn_press(btn):
     if(btn == '+'):
@@ -87,97 +59,21 @@ def rotate_control(control,amount):
 def select_control(control,angle):
     print( 'MOVING SELECTOR: ' + control.PARAM + ' Angle=' + `angle`)
     # TODO: Send the command that matches the angle
-                        
+
+cduScreenBuffer = TextScreenBuffer(0x11c0, 24,10)   # Note: 0x11C0 is the DCS offset for the CDU screen data
+arc210ScreenBuffer = TextScreenBuffer(0x11c0, 18,6)    # TODO: Find the offset for the ARC210 data
+
 # Setup the display callback for when parsed data changes
-def update_display(address, data):
+def parser_callback(address, data):
         #print('Parser update {}={}'.format(address,data))
         if mode == 'arc210':
             # TODO: Receive the SEL mode positions and rotate their knob accordingly
             
-            if address >= ARC210DISPLAY_START_ADDRESS and address < ARC210DISPLAY_START_ADDRESS + 10*24: # TODO: ARC210 max?
-                offset = address - ARC210DISPLAY_START_ADDRESS
-                data_bytes = struct.pack("<H", data)
-                arc210_display_data[offset] = data_bytes[0]
-                arc210_display_data[offset+1] = data_bytes[1]
-
+            if address >= arc210Screen.BASE_ADDRESS and address < arc210Screen.BASE_ADDRESS + arc210Screen.WIDTH*arc210Screen.HEIGHT:
+                arc210Screen.notifyBytes(data)
         else:
-            if address >= CDUDISPLAY_START_ADDRESS and address < CDUDISPLAY_START_ADDRESS + 10*24:
-                offset = address - CDUDISPLAY_START_ADDRESS
-                data_bytes = struct.pack("<H", data)
-                cdu_display_data[offset] = data_bytes[0]
-                cdu_display_data[offset+1] = data_bytes[1]
-
-# Constants
-CDU_COLOR = (0, 255, 0)
-CHARACTER_SIZE = 21
-CHARACTER_WIDTH = 18
-CHARACTER_HEIGHT = 36
-CDUDISPLAY_START_ADDRESS = 0x11c0
-ARC210DISPLAY_START_ADDRESS = 0x11c0 # TODO
-
-pos_map = {
-        chr(0xA9):0, # SYS_ACTION / "bullseye"
-        chr(0xAE):1, # ROTARY / up/down arrow
-        chr(0xA1):2, # DATA_ENTRY / "[]" symbol
-        chr(0xBB):3, # right arrow
-        chr(0xAB):4, # left arrow
-        b" ":5,
-        b"!":6,
-        b"#":7,
-        b"(":8,
-        b")":9,
-        b"*":10,
-        b"+":11,
-        b"-":12,
-        b".":13,
-        b"/":14,
-        b"0":15,
-        b"1":16,
-        b"2":17,
-        b"3":18,
-        b"4":19,
-        b"5":20,
-        b"6":21,
-        b"7":22,
-        b"8":23,
-        b"9":24,
-        b":":25,
-        b"=":26,
-        b"?":27,
-        b"A":28,
-        b"B":29,
-        b"C":30,
-        b"D":31,
-        b"E":32,
-        b"F":33,
-        b"G":34,
-        b"H":35,
-        b"I":36,
-        b"J":37,
-        b"K":38,
-        b"L":39,
-        b"M":40,
-        b"N":41,
-        b"O":42,
-        b"P":43,
-        b"Q":44,
-        b"R":45,
-        b"S":46,
-        b"T":47,
-        b"U":48,
-        b"V":49,
-        b"W":50,
-        b"X":51,
-        b"Y":52,
-        b"Z":53,
-        b"[":54,
-        b"]":55,
-        chr(0xB6):56, # filled / cursor
-        chr(0xB1):57, # plus/minus
-        chr(0xB0):58  # degree
-        }
-
-font = {}
+            if address >= cduScreen.BASE_ADDRESS and address < cduScreen.BASE_ADDRESS + cduScreen.WIDTH*cduScreen.HEIGHT:
+                cduScreen.notifyBytes(data)
 
 Control = namedtuple("Control", "X Y WIDTH HEIGHT PARAM TYPE")
 cdu_controls = [Control(66,531,79,86,'SYS', 'BTN'),
@@ -293,7 +189,6 @@ s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 s.settimeout(0)
 #s.bind(("0.0.0.0", 7779)) # Todo: put these back in for production
 
-
 print('Connected.  Opening outbound socket')
 
 s_tx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -305,9 +200,6 @@ print('Connected.')
 pygame.init()
 pygame.mixer.init()
 
-cdu_display_data = bytearray(24*10)
-arc210_display_data = bytearray(24*10)
-
 mode = "cdu"
 
 size = width, height = 800, 1280
@@ -315,7 +207,6 @@ screen = pygame.display.set_mode(size, pygame.DOUBLEBUF , 32)
 # | pygame.NOFRAME | pygame.FULLSCREEN  # Todo: put these back in for production
 
 #Loading
-font_img = pygame.image.load("font_A-10_CDU.tga")  # 512x512 pixel, 8x8 characters
 
 cdu_bg = pygame.image.load("cdu_bg.bmp")
 cdu_bg = pygame.transform.scale(cdu_bg, (width,height))
@@ -329,25 +220,16 @@ rotator_img = pygame.transform.scale(rotator_img, (90,90))
 squelch_img = pygame.image.load("squelch_knob.png")
 squelch_img = pygame.transform.scale(squelch_img, (70,70))
 
-
 #cdu_bg_rect = cdu_bg.get_rect()
 
 click_sound = pygame.mixer.Sound("click.wav")
 
-# MAP the font into individual charaters
-for k in pos_map.keys():
-        img = get_subimg(pos_map[k])
-        for x in range(64):
-                for y in range(64):
-                        r,g,b,a = img.get_at((x,y))
-                        if a > 128:
-                                img.set_at((x,y), CDU_COLOR)
-        img = pygame.transform.scale(img, (CHARACTER_SIZE, CHARACTER_SIZE))
-        font[k] = img
+cduFont = BitmapFontScreen(screen, 178, 117, (0, 255, 0))
+#arc210Font = BitmapFontScreen(screen, 205, 365, (0, 0, 255))
 
 # DCS-Bios Parser
 parser = ProtocolParser()
-parser.write_callbacks.add(update_display)
+parser.write_callbacks.add(parser_callback)
 
 pygame.scrap.init()
 #pixelRuler = PixelRuler(650,400,82,104)
@@ -453,12 +335,8 @@ while running == True:
 
         # Draw the screen data
         if mode=="arc210":
-            for i in range(24*10):
-                row = i // 24
-                col = i - (row*24)
-
-                set_arc210_char(row, col, chr(arc210_display_data[i]))
-
+            arc210ScreenBuffer.drawTo(arc210Font)
+            
             left_knob_image = pygame.transform.rotate(rotator_img, -45)
             left_knob_width,left_knob_height = left_knob_image.get_size()
             screen.blit(left_knob_image, (206 - (left_knob_width/2),961 - (left_knob_height/2)))
@@ -471,14 +349,8 @@ while running == True:
             squelch_knob_width,squelch_knob_height = squelch_knob_image.get_size()
             screen.blit(squelch_knob_image, (684 - (squelch_knob_width/2),366 + 7 - (squelch_knob_height/2)))
         else:
-            for i in range(24*10):
-                row = i // 24
-                col = i - (row*24)
-
-                set_cdu_char(row, col, chr(cdu_display_data[i]))
-                    
-                #print('data{},{}={} []'.format(row,col,format(cdu_display_data[i],'02x'),chr(cdu_display_data[i])))
-"""
+            cduScreenBuffer.drawTo(cduFont)
+        """
         #Debug only print all button outlines
         for btn in arc210_controls:
             pygame.draw.rect(screen, (0,255,0),(btn.X,btn.Y,btn.WIDTH,btn.HEIGHT), 1)
@@ -510,8 +382,7 @@ while running == True:
         if keys[pygame.K_s]:
             pixelRuler.HEIGHT += 1
             pixelRuler.ToClipboard()
-"""
-
+        """
         pygame.display.flip()
 
 pygame.quit()
