@@ -48,17 +48,22 @@ def btn_press(btn):
     pygame.draw.rect(screen, (150,150,150),(ctl.X,ctl.Y,ctl.WIDTH,ctl.HEIGHT), 3)   # Apply a little click effect
     
     print('Sending'+msg1);
-    s_tx.send(msg1+'\n')
+    #s_tx.send(msg1+'\n') # Todo: put these back in for production
     sleep(0.1)
-    s_tx.send(msg2+'\n')
+    #s_tx.send(msg2+'\n') # Todo: put these back in for production
 
 def rotate_control(control,amount):
-    print('ROT: ' + control.PARAM + ' ' + `(rotating_last_y-y)`)
-    # TODO: For amount, send INC/DEC commands
+    print('ROT: ' + control.PARAM + ' ' + amount)
+    #s_tx.send(control.PARAM+ ' ' + amount+'\n') # Todo: put these back in for production
 
 def select_control(control,angle):
-    print( 'MOVING SELECTOR: ' + control.PARAM + ' Angle=' + `angle`)
-    # TODO: Send the command that matches the angle
+    numpos = int(control.TYPE.replace('SEL_',''))
+    
+    pos = math.floor(angle / 360 * numpos)
+    pos = int((pos + (numpos/2)) % numpos)
+    #todo Takeout all these print commands
+    print( 'MOVING SELECTOR: ' + control.PARAM + ' Angle=' + `angle` + ' Pos=' + `pos`)
+    #s_tx.send(control.PARAM+ ' ' + pos+'\n') # Todo: put these back in for production
 
 cduScreenBuffer = TextScreenBuffer(0x11c0, 24,10)   # Note: 0x11C0 is the DCS offset for the CDU screen data
 arc210ScreenBuffer = TextScreenBuffer(0x11c0, 18,6)    # TODO: Find the offset for the ARC210 data
@@ -168,9 +173,9 @@ arc210_controls = [
                 Control(617,744,85,104,'FREQ_0XXKHZ', 'ROT'),
                 Control(345,897,101,117,'CHANNEL', 'ROT'),
 
-                Control(153,900,103,125,'ARC210_LEFT_MODE', 'SEL'),
-                Control(543,892,103,125,'ARC210_RIGHT_MODE', 'SEL'),
-                Control(640,329,90,87,'SQUELCH', 'SEL'),
+                Control(153,900,103,125,'ARC210_LEFT_MODE', 'SEL_8'),
+                Control(543,892,103,125,'ARC210_RIGHT_MODE', 'SEL_8'),
+                Control(640,329,90,87,'SQUELCH', 'SEL_2'),
                ]
 
 # Initialization
@@ -225,7 +230,7 @@ squelch_img = pygame.transform.scale(squelch_img, (70,70))
 click_sound = pygame.mixer.Sound("click.wav")
 
 cduFont = BitmapFontScreen(screen, 178, 117, (0, 255, 0))
-#arc210Font = BitmapFontScreen(screen, 205, 365, (0, 0, 255))
+arc210Font = BitmapFontScreen(screen, 205, 365, (0, 0, 255))
 
 # DCS-Bios Parser
 parser = ProtocolParser()
@@ -257,7 +262,7 @@ while running == True:
             running = False
         elif( event.type is MOUSEMOTION ):
             if rotating_control is not None:
-                if rotating_control.TYPE == 'SEL':
+                if rotating_control.TYPE.startswith('SEL_'):
                     x,y = pygame.mouse.get_pos()
                     sel_x, sel_y = selector_initial_xy;
                     dx = x - sel_x
@@ -277,14 +282,18 @@ while running == True:
                             else:
                                 angle += 270
 
-                        select_control(rotating_control, angle)                        
+                        select_control(rotating_control, angle)
+                elif( rotating_control.TYPE == 'ROT' ):
+                    x,y = pygame.mouse.get_pos()
+                    if( y-rotating_last_y > 50 ):
+                        rotate_control(rotating_control, "DEC")
+                        rotating_last_y = y
+                    elif( y-rotating_last_y < -50 ):
+                        rotate_control(rotating_control, "INC")
+                        rotating_last_y = y
         elif( event.type is MOUSEBUTTONUP ):
             rotating_control = None
-            #print( 'MOUSEBUTTONUP' )
-        elif( rotating_control is not None ):
-            x,y = pygame.mouse.get_pos()
-            rotate_control(rotating_control, rotating_last_y-y)
-            rotating_last_y = y
+            #print( 'MOUSEBUTTONUP' )        
         elif( event.type is MOUSEBUTTONDOWN ):
             pos = pygame.mouse.get_pos()
             x,y = pos
@@ -297,7 +306,7 @@ while running == True:
                         rotating_control = ctl
                         rotating_last_y = y
                         click_sound.play()
-                    elif( ctl.TYPE == 'SEL' ):
+                    elif( ctl.TYPE.startswith('SEL_') ):
                         print('Start SEL: ' + ctl.PARAM)
                         rotating_control = ctl
                         selector_initial_xy = pos
