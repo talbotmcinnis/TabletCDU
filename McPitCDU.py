@@ -61,9 +61,13 @@ def select_control(control,angle):
     
     pos = math.floor(angle / 360 * numpos)
     pos = int((pos + (numpos/2)) % numpos)
-    #todo Takeout all these print commands
-    print( 'MOVING SELECTOR: ' + control.PARAM + ' Angle=' + `angle` + ' Pos=' + `pos`)
     #s_tx.send(control.PARAM+ ' ' + pos+'\n') # Todo: put these back in for production
+    # Debug only; test rotation UI
+    #global arc210_leftknob_rotation
+    #arc210_leftknob_rotation = (pos*360/numpos) - 180
+
+    #todo Takeout all these print commands
+    print( 'MOVING SELECTOR: ' + control.PARAM + ' Angle=' + `angle` + ' Pos=' + `pos` + ' ImgAngle=' + `arc210_leftknob_rotation`)
 
 cduScreenBuffer = TextScreenBuffer(0x11c0, 24,10)   # Note: 0x11C0 is the DCS offset for the CDU screen data
 arc210ScreenBuffer = TextScreenBuffer(0x11c0, 18,6)    # TODO: Find the offset for the ARC210 data
@@ -73,12 +77,18 @@ def parser_callback(address, data):
         #print('Parser update {}={}'.format(address,data))
         if mode == 'arc210':
             # TODO: Receive the SEL mode positions and rotate their knob accordingly
+            #global arc210_leftknob_rotation
+            #arc210_leftknob_rotation = (pos*360/numpos) - 180
+            #global arc210_rightknob_rotation
+            #arc210_rightknob_rotation = (pos*360/numpos) - 180
+            #global arc210_squelch_on
+            #arc210_squelch_on = 
             
-            if address >= arc210Screen.BASE_ADDRESS and address < arc210Screen.BASE_ADDRESS + arc210Screen.WIDTH*arc210Screen.HEIGHT:
-                arc210Screen.notifyBytes(data)
+            if address >= arc210ScreenBuffer.BASE_ADDRESS and address < arc210ScreenBuffer.BASE_ADDRESS + arc210ScreenBuffer.WIDTH*arc210ScreenBuffer.HEIGHT:
+                arc210ScreenBuffer.notifyBytes(data)
         else:
-            if address >= cduScreen.BASE_ADDRESS and address < cduScreen.BASE_ADDRESS + cduScreen.WIDTH*cduScreen.HEIGHT:
-                cduScreen.notifyBytes(data)
+            if address >= cduScreenBuffer.BASE_ADDRESS and address < cduScreenBuffer.BASE_ADDRESS + cduScreenBuffer.WIDTH*cduScreenBuffer.HEIGHT:
+                cduScreenBuffer.notifyBytes(data)
 
 Control = namedtuple("Control", "X Y WIDTH HEIGHT PARAM TYPE")
 cdu_controls = [Control(66,531,79,86,'SYS', 'BTN'),
@@ -229,8 +239,8 @@ squelch_img = pygame.transform.scale(squelch_img, (70,70))
 
 click_sound = pygame.mixer.Sound("click.wav")
 
-cduFont = BitmapFontScreen(screen, 178, 117, (0, 255, 0))
-arc210Font = BitmapFontScreen(screen, 205, 365, (0, 0, 255))
+cduFont = BitmapFontScreen(screen, 178, 117, (0, 255, 0), 1.0, 0)
+arc210Font = BitmapFontScreen(screen, 205, 365, (0, 0, 255), 1.15, 10)
 
 # DCS-Bios Parser
 parser = ProtocolParser()
@@ -250,6 +260,10 @@ running = True
 rotating_control = None
 rotating_last_y = 0
 selector_initial_xy = (0,0)
+
+arc210_leftknob_rotation = 0
+arc210_rightknob_rotation = 0
+arc210_squelch_on = False
 
 while running == True:
     # Slow down the loop so we don't kill the CPU
@@ -281,7 +295,7 @@ while running == True:
                                 angle += 90
                             else:
                                 angle += 270
-
+                                
                         select_control(rotating_control, angle)
                 elif( rotating_control.TYPE == 'ROT' ):
                     x,y = pygame.mouse.get_pos()
@@ -345,16 +359,15 @@ while running == True:
         # Draw the screen data
         if mode=="arc210":
             arc210ScreenBuffer.drawTo(arc210Font)
-            
-            left_knob_image = pygame.transform.rotate(rotator_img, -45)
+            left_knob_image = pygame.transform.rotate(rotator_img, -arc210_leftknob_rotation)
             left_knob_width,left_knob_height = left_knob_image.get_size()
             screen.blit(left_knob_image, (206 - (left_knob_width/2),961 - (left_knob_height/2)))
 
-            right_knob_image = pygame.transform.rotate(rotator_img, -90)
+            right_knob_image = pygame.transform.rotate(rotator_img, -arc210_rightknob_rotation)
             right_knob_width,right_knob_height = right_knob_image.get_size()
             screen.blit(right_knob_image, (594 - (right_knob_width/2),956 - (right_knob_height/2)))
 
-            squelch_knob_image = pygame.transform.rotate(squelch_img, -22.5)
+            squelch_knob_image = pygame.transform.flip(squelch_img, arc210_squelch_on, False)
             squelch_knob_width,squelch_knob_height = squelch_knob_image.get_size()
             screen.blit(squelch_knob_image, (684 - (squelch_knob_width/2),366 + 7 - (squelch_knob_height/2)))
         else:
