@@ -48,29 +48,28 @@ def btn_press(btn):
     pygame.draw.rect(screen, (150,150,150),(ctl.X,ctl.Y,ctl.WIDTH,ctl.HEIGHT), 3)   # Apply a little click effect
     
     print('Sending'+msg1);
-    #s_tx.send(msg1+'\n') # Todo: put these back in for production
+    s_tx.send(msg1+'\n')
     sleep(0.1)
-    #s_tx.send(msg2+'\n') # Todo: put these back in for production
+    s_tx.send(msg2+'\n')
 
 def rotate_control(control,amount):
     print('ROT: ' + control.PARAM + ' ' + amount)
-    #s_tx.send(control.PARAM+ ' ' + amount+'\n') # Todo: put these back in for production
+    s_tx.send(control.PARAM+ ' ' + amount+'\n')
 
 def select_control(control,angle):
     numpos = int(control.TYPE.replace('SEL_',''))
     
     pos = math.floor(angle / 360 * numpos)
     pos = int((pos + (numpos/2)) % numpos)
-    #s_tx.send(control.PARAM+ ' ' + pos+'\n') # Todo: put these back in for production
+    s_tx.send(control.PARAM+ ' ' + pos+'\n')
     # Debug only; test rotation UI
     #global arc210_leftknob_rotation
     #arc210_leftknob_rotation = (pos*360/numpos) - 180
 
-    #todo Takeout all these print commands
-    print( 'MOVING SELECTOR: ' + control.PARAM + ' Angle=' + `angle` + ' Pos=' + `pos` + ' ImgAngle=' + `arc210_leftknob_rotation`)
+    #print( 'MOVING SELECTOR: ' + control.PARAM + ' Angle=' + `angle` + ' Pos=' + `pos` + ' ImgAngle=' + `arc210_leftknob_rotation`)
 
 cduScreenBuffer = TextScreenBuffer(0x11c0, 24,10)   # Note: 0x11C0 is the DCS offset for the CDU screen data
-arc210ScreenBuffer = TextScreenBuffer(0x11c0, 18,6)    # TODO: Find the offset for the ARC210 data
+#arc210ScreenBuffer = TextScreenBuffer(0x11c0, 18,6)    # TODO: Find the offset for the ARC210 data  Derp, this won't ever work due to mixed sized fonts.
 
 # Setup the display callback for when parsed data changes
 def parser_callback(address, data):
@@ -84,8 +83,8 @@ def parser_callback(address, data):
             #global arc210_squelch_on
             #arc210_squelch_on = 
             
-            if address >= arc210ScreenBuffer.BASE_ADDRESS and address < arc210ScreenBuffer.BASE_ADDRESS + arc210ScreenBuffer.WIDTH*arc210ScreenBuffer.HEIGHT:
-                arc210ScreenBuffer.notifyBytes(data)
+            #if address >= arc210ScreenBuffer.BASE_ADDRESS and address < arc210ScreenBuffer.BASE_ADDRESS + arc210ScreenBuffer.WIDTH*arc210ScreenBuffer.HEIGHT:
+            #    arc210ScreenBuffer.notifyBytes(data)
         else:
             if address >= cduScreenBuffer.BASE_ADDRESS and address < cduScreenBuffer.BASE_ADDRESS + cduScreenBuffer.WIDTH*cduScreenBuffer.HEIGHT:
                 cduScreenBuffer.notifyBytes(data)
@@ -162,29 +161,29 @@ arc210_controls = [
                 Control(717,1,82,75,'QUIT', 'BTN'),
                 Control(1,1,82,75,'TOGGLE', 'BTN'),
 
-                Control(515,205,110,68,'RTSELECT', 'BTN'),
+                Control(515,205,110,68,'TRANS_REC_SEL', 'BTN'),
                 Control(403,205,80,68,'GPS', 'BTN'),
-                Control(292,205,80,68,'TOD_RCV', 'BTN'),
-                Control(143,207,80,68,'TOD_SND', 'BTN'),
-                Control(40,345,97,68,'LSK_1', 'BTN'),
-                Control(40,473,97,68,'LSK_2', 'BTN'),
-                Control(40,604,97,68,'LSK_3', 'BTN'),
-                Control(8,694,61,94,'BRT_INC', 'BTN'),
-                Control(10,827,57,80,'BRT_DEC', 'BTN'),
-                Control(718,465,68,90,'AM_FM', 'BTN'),
-                Control(715,600,71,95,'OFFSET_RCV', 'BTN'),
-                Control(611,600,71,95,'XMT_RCV_SND', 'BTN'),
-                Control(612,467,71,95,'MENU_TIME', 'BTN'),
+                Control(292,205,80,68,'TOD_REC', 'BTN'),
+                Control(143,207,80,68,'TOD_SEND', 'BTN'),
+                Control(40,345,97,68,'FSK_UP', 'BTN'),
+                Control(40,473,97,68,'FSK_MID', 'BTN'),
+                Control(40,604,97,68,'FSK_LOW', 'BTN'),
+                Control(8,694,61,94,'BRIGHT_INC', 'BTN'),
+                Control(10,827,57,80,'BRIGHT_DEC', 'BTN'),
+                Control(718,465,68,90,'AMP_FREQ_MODUL', 'BTN'),
+                Control(715,600,71,95,'OFF_FREQ', 'BTN'),
+                Control(611,600,71,95,'TRANS_REC_FUNC', 'BTN'),
+                Control(612,467,71,95,'MENU', 'BTN'),
                 Control(724,723,63,173,'ENTER', 'BTN'),
-                Control(91,752,88,104,'FREQ_X00_MHZ', 'ROT'),
-                Control(222,752,92,104,'FREQ_X0_MHZ', 'ROT'),
-                Control(354,752,85,104,'FREQ_X_MHZ', 'ROT'),
-                Control(488,752,85,104,'FREQ_X00_KHZ', 'ROT'),
-                Control(617,744,85,104,'FREQ_0XXKHZ', 'ROT'),
-                Control(345,897,101,117,'CHANNEL', 'ROT'),
+                Control(91,752,88,104,'100MHZ_SEL', 'ROT'),
+                Control(222,752,92,104,'10MHZ_SEL', 'ROT'),
+                Control(354,752,85,104,'1MHZ_SEL', 'ROT'),
+                Control(488,752,85,104,'100KHZ_SEL', 'ROT'),
+                Control(617,744,85,104,'25KHZ_SEL', 'ROT'),
+                Control(345,897,101,117,'CHN_KNB', 'ROT'),
 
-                Control(153,900,103,125,'ARC210_LEFT_MODE', 'SEL_8'),
-                Control(543,892,103,125,'ARC210_RIGHT_MODE', 'SEL_8'),
+                Control(153,900,103,125,'MASTER', 'SEL_8'),
+                Control(543,892,103,125,'SEC_SW', 'SEL_8'),
                 Control(640,329,90,87,'SQUELCH', 'SEL_2'),
                ]
 
@@ -202,13 +201,13 @@ print ('Waiting to connect...')
 
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 s.settimeout(0)
-#s.bind(("0.0.0.0", 7779)) # Todo: put these back in for production
+s.bind(("0.0.0.0", 7779))
 
-print('Connected.  Opening outbound socket')
+print ('Connected.  Opening outbound socket')
 
 s_tx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 s_tx.settimeout(0)
-#s_tx.connect((CONNECTION["host"], 7778)) # Todo: put these back in for production
+s_tx.connect((CONNECTION["host"], 7778))
 
 print('Connected.')
 
@@ -358,7 +357,7 @@ while running == True:
 
         # Draw the screen data
         if mode=="arc210":
-            arc210ScreenBuffer.drawTo(arc210Font)
+            #arc210ScreenBuffer.drawTo(arc210Font)
             left_knob_image = pygame.transform.rotate(rotator_img, -arc210_leftknob_rotation)
             left_knob_width,left_knob_height = left_knob_image.get_size()
             screen.blit(left_knob_image, (206 - (left_knob_width/2),961 - (left_knob_height/2)))
