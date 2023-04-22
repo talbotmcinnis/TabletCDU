@@ -74,15 +74,17 @@ cduScreenBuffer = TextScreenBuffer(0x11c0, 24,10)   # Note: 0x11C0 is the DCS of
 # Setup the display callback for when parsed data changes
 def parser_callback(address, data):
         #print('Parser update {}={}'.format(address,data))
-        #if mode == 'arc210':
-            # TODO: Receive the SEL mode positions and rotate their knob accordingly
-            #global arc210_leftknob_rotation
-            #arc210_leftknob_rotation = (pos*360/numpos) - 180
-            #global arc210_rightknob_rotation
-            #arc210_rightknob_rotation = (pos*360/numpos) - 180
-            #global arc210_squelch_on
-            #arc210_squelch_on = 
-        #else:
+        if mode == 'arc210':
+            if address == 0x12d2:
+                newValue = (data & 0x1c00) >> 10
+                arc210_leftknob_rotation = (newValue*360/6) - 180
+            elif address == 0x12d2:
+                newValue = (data & 0xe000) >> 13
+                arc210_rightknob_rotation = (newValue*360/6) - 180
+            elif address == 0x12fe:
+                newValue = (data & 0x0020) >> 5
+                arc210_squelch_on = newValue
+        else:
             if address >= cduScreenBuffer.BASE_ADDRESS and address < cduScreenBuffer.BASE_ADDRESS + cduScreenBuffer.WIDTH*cduScreenBuffer.HEIGHT:
                 cduScreenBuffer.notifyBytes(data)
 
@@ -275,11 +277,13 @@ while running == True:
             #print( 'MOUSEMOTION' )
             if rotating_control is not None:
                 if rotating_control.TYPE.startswith('SEL_'):
+                    #print( 'Rotating brah' )
                     x,y = pygame.mouse.get_pos()
                     sel_x, sel_y = selector_initial_xy;
                     dx = x - sel_x
                     dy = y - sel_y
                     magnitude = abs(math.sqrt(dx*dx + dy*dy))
+                    
                     if( magnitude > 75 ):
                         angle = 0
                         if dx == 0 :
@@ -293,7 +297,7 @@ while running == True:
                                 angle += 90
                             else:
                                 angle += 270
-                                
+
                         select_control(rotating_control, angle)
                 elif( rotating_control.TYPE == 'ROT' ):
                     x,y = pygame.mouse.get_pos()
@@ -307,7 +311,7 @@ while running == True:
             rotating_control = None
             #print( 'MOUSEBUTTONUP' )        
         elif( event.type == MOUSEBUTTONDOWN ):
-            print( 'MOUSEBUTTONDOWN' )
+            #print( 'MOUSEBUTTONDOWN' )
             pos = pygame.mouse.get_pos()
             x,y = pos
             activeControls = arc210_controls if mode == 'arc210' else cdu_controls
