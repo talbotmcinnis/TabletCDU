@@ -222,7 +222,7 @@ cdu_buttons = [CDUButton(66,531,79,86,'SYS'),
 # Line is:
 # BIOS.protocol_io.UDPSender:create({ port = 7779, host = "127.0.0.1" })
 CONNECTION = {
-    "host":"192.168.0.29"
+    "host":"192.168.84.139"
 }
 
 print ('Waiting to connect...')
