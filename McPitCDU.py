@@ -28,10 +28,10 @@ def btn_press(btn):
     elif(btn == 'PG-'):
         msg1 = 'CDU_PG 0'
         msg2 = 'CDU_PG 1'
-    elif(btn == 'SCROLL_R'):
+    elif(btn == 'SCROLL_L'):
         msg1 = 'CDU_SCROLL 0'
         msg2 = 'CDU_SCROLL 1'
-    elif(btn == 'SCROLL_L'):
+    elif(btn == 'SCROLL_R'):
         msg1 = 'CDU_SCROLL 2'
         msg2 = 'CDU_SCROLL 1'
     elif(btn == 'TOGGLE'):
@@ -54,14 +54,14 @@ def btn_press(btn):
 
 def rotate_control(control,amount):
     print('ROT: ' + control.PARAM + ' ' + amount)
-    s_tx.send(control.PARAM+ ' ' + str(amount) +'\n')
+    s_tx.send(control.PARAM+ ' ' + amount+'\n')
 
 def select_control(control,angle):
     numpos = int(control.TYPE.replace('SEL_',''))
     
     pos = math.floor(angle / 360 * numpos)
     pos = int((pos + (numpos/2)) % numpos)
-    s_tx.send(control.PARAM+ ' ' + str(pos) +'\n')
+    s_tx.send(control.PARAM+ ' ' + pos+'\n')
     # Debug only; test rotation UI
     #global arc210_leftknob_rotation
     #arc210_leftknob_rotation = (pos*360/numpos) - 180
@@ -74,7 +74,7 @@ cduScreenBuffer = TextScreenBuffer(0x11c0, 24,10)   # Note: 0x11C0 is the DCS of
 # Setup the display callback for when parsed data changes
 def parser_callback(address, data):
         #print('Parser update {}={}'.format(address,data))
-        #if mode == 'arc210':
+        if mode == 'arc210':
             # TODO: Receive the SEL mode positions and rotate their knob accordingly
             #global arc210_leftknob_rotation
             #arc210_leftknob_rotation = (pos*360/numpos) - 180
@@ -82,7 +82,10 @@ def parser_callback(address, data):
             #arc210_rightknob_rotation = (pos*360/numpos) - 180
             #global arc210_squelch_on
             #arc210_squelch_on = 
-        #else:
+            
+            #if address >= arc210ScreenBuffer.BASE_ADDRESS and address < arc210ScreenBuffer.BASE_ADDRESS + arc210ScreenBuffer.WIDTH*arc210ScreenBuffer.HEIGHT:
+            #    arc210ScreenBuffer.notifyBytes(data)
+        else:
             if address >= cduScreenBuffer.BASE_ADDRESS and address < cduScreenBuffer.BASE_ADDRESS + cduScreenBuffer.WIDTH*cduScreenBuffer.HEIGHT:
                 cduScreenBuffer.notifyBytes(data)
 
@@ -268,11 +271,9 @@ while running == True:
   
     # PyGame event loop
     for event in pygame.event.get():
-        #print(event.type)
         if event.type == pygame.QUIT:
             running = False
-        elif( event.type == MOUSEMOTION ):
-            #print( 'MOUSEMOTION' )
+        elif( event.type is MOUSEMOTION ):
             if rotating_control is not None:
                 if rotating_control.TYPE.startswith('SEL_'):
                     x,y = pygame.mouse.get_pos()
@@ -303,11 +304,10 @@ while running == True:
                     elif( y-rotating_last_y < -50 ):
                         rotate_control(rotating_control, "INC")
                         rotating_last_y = y
-        elif( event.type == MOUSEBUTTONUP ):
+        elif( event.type is MOUSEBUTTONUP ):
             rotating_control = None
             #print( 'MOUSEBUTTONUP' )        
-        elif( event.type == MOUSEBUTTONDOWN ):
-            print( 'MOUSEBUTTONDOWN' )
+        elif( event.type is MOUSEBUTTONDOWN ):
             pos = pygame.mouse.get_pos()
             x,y = pos
             activeControls = arc210_controls if mode == 'arc210' else cdu_controls
@@ -371,13 +371,12 @@ while running == True:
             screen.blit(squelch_knob_image, (684 - (squelch_knob_width/2),366 + 7 - (squelch_knob_height/2)))
         else:
             cduScreenBuffer.drawTo(cduFont)
-        
+        """
         #Debug only print all button outlines
         for btn in arc210_controls:
             pygame.draw.rect(screen, (0,255,0),(btn.X,btn.Y,btn.WIDTH,btn.HEIGHT), 1)
-        """
         pygame.draw.rect(screen, (255,0,0),(pixelRuler.X,pixelRuler.Y,pixelRuler.WIDTH,pixelRuler.HEIGHT), 1)
-        
+
         # Debug print the pixel ruler
         keys = pygame.key.get_pressed()
         if keys[pygame.K_LEFT]:
