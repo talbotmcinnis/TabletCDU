@@ -1,14 +1,6 @@
 #!python2
 from __future__ import print_function
 
-# use UDP (configure a UDPSender in BIOSConfig.lua
-# to send the data to the host running this script)
-# Line is:
-# BIOS.protocol_io.UDPSender:create({ port = 7779, host = "127.0.0.1" })
-CONNECTION = {
-    "host":"192.168.84.139"
-}
-
 import sys, pygame, math
 
 import socket
@@ -22,6 +14,22 @@ from textscreenbuffer import TextScreenBuffer
 from bitmapfontscreen import BitmapFontScreen
 
 import struct
+
+# use UDP (configure a UDPSender in BIOSConfig.lua
+# to send the data to the host running this script)
+# Line is:
+# BIOS.protocol_io.UDPSender:create({ port = 7779, host = "127.0.0.1" })
+CONNECTION = {
+    "host":"192.168.84.139"
+}
+
+rotating_control = None
+rotating_last_y = 0
+selector_initial_xy = (0,0)
+
+arc210_leftknob_rotation = 0
+arc210_rightknob_rotation = 0
+arc210_squelch_on = False
 
 def btn_press(btn):
     if(btn == '+'):
@@ -45,12 +53,8 @@ def btn_press(btn):
     elif(btn == 'TOGGLE'):
         return
     else:
-        if mode == 'arc210':
-            msg1 = 'ARC210_' + btn + ' 1'
-            msg2 = 'ARC210_' + btn + ' 0'
-        else:
-            msg1 = 'CDU_' + btn + ' 1'
-            msg2 = 'CDU_' + btn + ' 0'
+        msg1 = btn + ' 1'
+        msg2 = btn + ' 0'
 
     click_sound.play()
     pygame.draw.rect(screen, (150,150,150),(ctl.X,ctl.Y,ctl.WIDTH,ctl.HEIGHT), 3)   # Apply a little click effect
@@ -61,7 +65,7 @@ def btn_press(btn):
     s_tx.send(msg2+'\n')
 
 def rotate_control(control,amount):
-    print('ROT: ' + control.PARAM + ' ' + amount)
+    #print('ROT: ' + control.PARAM + ' ' + str(amount))
     s_tx.send(control.PARAM+ ' ' + str(amount) +'\n')
 
 def select_control(control,angle):
@@ -76,88 +80,95 @@ def select_control(control,angle):
 
     #print( 'MOVING SELECTOR: ' + control.PARAM + ' Angle=' + `angle` + ' Pos=' + `pos` + ' ImgAngle=' + `arc210_leftknob_rotation`)
 
-cduScreenBuffer = TextScreenBuffer(0x11c0, 24,10)   # Note: 0x11C0 is the DCS offset for the CDU screen data
+cduScreenBuffer = TextScreenBuffer(0x11b4, 24,10)   # Note: 0x11C0 is the DCS offset for the CDU screen data
 #arc210ScreenBuffer = TextScreenBuffer(0x11c0, 18,6)    # TODO: Find the offset for the ARC210 data  Derp, this won't ever work due to mixed sized fonts.
 
 # Setup the display callback for when parsed data changes
 def parser_callback(address, data):
-        #print('Parser update {}={}'.format(address,data))
+        # print('Parser update {}={}'.format(address,data))
         if mode == 'arc210':
-            if address == 0x12d2:
-                newValue = (data & 0x1c00) >> 10
-                arc210_leftknob_rotation = (newValue*360/6) - 180
-            elif address == 0x12d2:
-                newValue = (data & 0xe000) >> 13
-                arc210_rightknob_rotation = (newValue*360/6) - 180
-            elif address == 0x12fe:
-                newValue = (data & 0x0020) >> 5
-                arc210_squelch_on = newValue
+            if address == 0x12d4:
+                newValue = (data & 0x0700) >> 8
+                global arc210_leftknob_rotation
+                arc210_leftknob_rotation = ((newValue+1)*360/8) - 180
+                #print('Arc210 left knob to ', arc210_leftknob_rotation)                
+
+                newValue = (data & 0x3800) >> 11
+                global arc210_rightknob_rotation
+                arc210_rightknob_rotation = ((newValue+1)*360/8) - 180
+                #print('Arc210 right knob to ', arc210_rightknob_rotation)                
+            elif address == 0x12e8:
+                newValue = (data & 0x0004) >> 2
+                global arc210_squelch_on
+                arc210_squelch_on = newValue>0
+                #print('Arc210 squelch to ', arc210_squelch_on)                
         else:
             if address >= cduScreenBuffer.BASE_ADDRESS and address < cduScreenBuffer.BASE_ADDRESS + cduScreenBuffer.WIDTH*cduScreenBuffer.HEIGHT:
-                cduScreenBuffer.notifyBytes(data)
+                #print('CDU data...')
+                cduScreenBuffer.notifyBytes(address, data)
 
 Control = namedtuple("Control", "X Y WIDTH HEIGHT PARAM TYPE")
-cdu_controls = [Control(66,531,79,86,'SYS', 'BTN'),
-               Control(149,531,79,86,'NAV', 'BTN'),
-               Control(232,531,79,86,'WP', 'BTN'),
-               Control(318,530,79,86,'OSET', 'BTN'),
-               Control(396,530,79,86,'FPM', 'BTN'),
-               Control(482,531,79,86,'PREV', 'BTN'),
-               Control(298,638,80,92,'A', 'BTN'),
-               Control(379,638,80,92,'B', 'BTN'),
-               Control(457,638,80,92,'C', 'BTN'),
-               Control(538,638,80,92,'D', 'BTN'),
-               Control(619,638,80,92,'E', 'BTN'),
-               Control(700,638,80,92,'F', 'BTN'),
-               Control(298,738,79,103,'G', 'BTN'),
-               Control(379,738,79,103,'H', 'BTN'),
-               Control(458,738,79,103,'I', 'BTN'),
-               Control(539,738,79,103,'J', 'BTN'),
-               Control(620,738,79,103,'K', 'BTN'),
-               Control(702,738,79,103,'L', 'BTN'),
-               Control(298,845,79,89,'M', 'BTN'),
-               Control(379,845,79,89,'N', 'BTN'),
-               Control(460,845,79,89,'O', 'BTN'),
-               Control(540,845,79,86,'P', 'BTN'),
-               Control(621,845,79,86,'Q', 'BTN'),
-               Control(703,845,79,86,'R', 'BTN'),
-               Control(297,944,79,93,'S', 'BTN'),
-               Control(379,944,79,93,'T', 'BTN'),
-               Control(461,944,79,93,'U', 'BTN'),
-               Control(540,944,79,93,'V', 'BTN'),
-               Control(620,944,79,93,'W', 'BTN'),
-               Control(703,944,79,92,'X', 'BTN'),
-               Control(188,944,93,98,'SLASH', 'BTN'),
-               Control(2,944,93,98,'POINT', 'BTN'),
-               Control(13,632,82,104,'1', 'BTN'),
-               Control(102,632,82,104,'2', 'BTN'),
-               Control(188,632,82,104,'3', 'BTN'),
-               Control(14,736,82,104,'4', 'BTN'),
-               Control(101,736,82,104,'5', 'BTN'),
-               Control(188,736,82,104,'6', 'BTN'),
-               Control(14,839,82,104,'7', 'BTN'),
-               Control(99,839,82,104,'8', 'BTN'),
-               Control(188,839,82,104,'9', 'BTN'),
-               Control(99,944,82,104,'0', 'BTN'),
-               Control(46,163,118,70,'LSK_3L', 'BTN'),
-               Control(46,234,118,70,'LSK_5L', 'BTN'),
-               Control(46,303,118,67,'LSK_7L', 'BTN'),
-               Control(46,374,118,67,'LSK_9L', 'BTN'),
-               Control(631,163,118,70,'LSK_3R', 'BTN'),
-               Control(631,234,118,70,'LSK_5R', 'BTN'),
-               Control(631,303,118,67,'LSK_7R', 'BTN'),
-               Control(631,374,118,67,'LSK_9R', 'BTN'),
-               Control(316,1047,82,104,'BCK', 'BTN'),
-               Control(402,1047,82,104,'SPC', 'BTN'),
-               Control(485,1047,77,104,'Y', 'BTN'),
-               Control(564,1047,77,104,'Z', 'BTN'),
-               Control(656,1058,72,89,'+', 'BTN'),
-               Control(656,1152,72,89,'-', 'BTN'),
-               Control(566,1155,72,104,'FA', 'BTN'),
-               Control(483,1153,80,91,'CLR', 'BTN'),
-               Control(190,1153,80,91,'MK', 'BTN'),
-               Control(65,1153,80,91,'PG-', 'BTN'),
-               Control(65,1056,80,91,'PG+', 'BTN'),
+cdu_controls = [Control(66,531,79,86,'CDU_SYS', 'BTN'),
+               Control(149,531,79,86,'CDU_NAV', 'BTN'),
+               Control(232,531,79,86,'CDU_WP', 'BTN'),
+               Control(318,530,79,86,'CDU_OSET', 'BTN'),
+               Control(396,530,79,86,'CDU_FPM', 'BTN'),
+               Control(482,531,79,86,'CDU_PREV', 'BTN'),
+               Control(298,638,80,92,'CDU_A', 'BTN'),
+               Control(379,638,80,92,'CDU_B', 'BTN'),
+               Control(457,638,80,92,'CDU_C', 'BTN'),
+               Control(538,638,80,92,'CDU_D', 'BTN'),
+               Control(619,638,80,92,'CDU_E', 'BTN'),
+               Control(700,638,80,92,'CDU_F', 'BTN'),
+               Control(298,738,79,103,'CDU_G', 'BTN'),
+               Control(379,738,79,103,'CDU_H', 'BTN'),
+               Control(458,738,79,103,'CDU_I', 'BTN'),
+               Control(539,738,79,103,'CDU_J', 'BTN'),
+               Control(620,738,79,103,'CDU_K', 'BTN'),
+               Control(702,738,79,103,'CDU_L', 'BTN'),
+               Control(298,845,79,89,'CDU_M', 'BTN'),
+               Control(379,845,79,89,'CDU_N', 'BTN'),
+               Control(460,845,79,89,'CDU_O', 'BTN'),
+               Control(540,845,79,86,'CDU_P', 'BTN'),
+               Control(621,845,79,86,'CDU_Q', 'BTN'),
+               Control(703,845,79,86,'CDU_R', 'BTN'),
+               Control(297,944,79,93,'CDU_S', 'BTN'),
+               Control(379,944,79,93,'CDU_T', 'BTN'),
+               Control(461,944,79,93,'CDU_U', 'BTN'),
+               Control(540,944,79,93,'CDU_V', 'BTN'),
+               Control(620,944,79,93,'CDU_W', 'BTN'),
+               Control(703,944,79,92,'CDU_X', 'BTN'),
+               Control(188,944,93,98,'CDU_SLASH', 'BTN'),
+               Control(2,944,93,98,'CDU_POINT', 'BTN'),
+               Control(13,632,82,104,'CDU_1', 'BTN'),
+               Control(102,632,82,104,'CDU_2', 'BTN'),
+               Control(188,632,82,104,'CDU_3', 'BTN'),
+               Control(14,736,82,104,'CDU_4', 'BTN'),
+               Control(101,736,82,104,'CDU_5', 'BTN'),
+               Control(188,736,82,104,'CDU_6', 'BTN'),
+               Control(14,839,82,104,'CDU_7', 'BTN'),
+               Control(99,839,82,104,'CDU_8', 'BTN'),
+               Control(188,839,82,104,'CDU_9', 'BTN'),
+               Control(99,944,82,104,'CDU_0', 'BTN'),
+               Control(46,163,118,70,'CDU_LSK_3L', 'BTN'),
+               Control(46,234,118,70,'CDU_LSK_5L', 'BTN'),
+               Control(46,303,118,67,'CDU_LSK_7L', 'BTN'),
+               Control(46,374,118,67,'CDU_LSK_9L', 'BTN'),
+               Control(631,163,118,70,'CDU_LSK_3R', 'BTN'),
+               Control(631,234,118,70,'vLSK_5R', 'BTN'),
+               Control(631,303,118,67,'CDU_LSK_7R', 'BTN'),
+               Control(631,374,118,67,'CDU_LSK_9R', 'BTN'),
+               Control(316,1047,82,104,'CDU_BCK', 'BTN'),
+               Control(402,1047,82,104,'CDU_SPC', 'BTN'),
+               Control(485,1047,77,104,'CDU_Y', 'BTN'),
+               Control(564,1047,77,104,'CDU_Z', 'BTN'),
+               Control(656,1058,72,89,'CDU_+', 'BTN'),
+               Control(656,1152,72,89,'CDU_-', 'BTN'),
+               Control(566,1155,72,104,'CDU_FA', 'BTN'),
+               Control(483,1153,80,91,'CDU_CLR', 'BTN'),
+               Control(190,1153,80,91,'CDU_MK', 'BTN'),
+               Control(65,1153,80,91,'CDU_PG-', 'BTN'),
+               Control(65,1056,80,91,'CDU_PG+', 'BTN'),
                Control(717,1,82,75,'QUIT', 'BTN'),
                Control(284,1153,95,91,'SCROLL_L', 'BTN'),
                Control(379,1153,95,91,'SCROLL_R', 'BTN'),
@@ -168,30 +179,30 @@ arc210_controls = [
                 Control(717,1,82,75,'QUIT', 'BTN'),
                 Control(1,1,82,75,'TOGGLE', 'BTN'),
 
-                Control(515,205,110,68,'TRANS_REC_SEL', 'BTN'),
-                Control(403,205,80,68,'GPS', 'BTN'),
-                Control(292,205,80,68,'TOD_REC', 'BTN'),
-                Control(143,207,80,68,'TOD_SEND', 'BTN'),
-                Control(40,345,97,68,'FSK_UP', 'BTN'),
-                Control(40,473,97,68,'FSK_MID', 'BTN'),
-                Control(40,604,97,68,'FSK_LOW', 'BTN'),
-                Control(8,694,61,94,'BRIGHT_INC', 'BTN'),
-                Control(10,827,57,80,'BRIGHT_DEC', 'BTN'),
-                Control(718,465,68,90,'AMP_FREQ_MODUL', 'BTN'),
-                Control(715,600,71,95,'OFF_FREQ', 'BTN'),
-                Control(611,600,71,95,'TRANS_REC_FUNC', 'BTN'),
-                Control(612,467,71,95,'MENU', 'BTN'),
-                Control(724,723,63,173,'ENTER', 'BTN'),
-                Control(91,752,88,104,'100MHZ_SEL', 'ROT'),
-                Control(222,752,92,104,'10MHZ_SEL', 'ROT'),
-                Control(354,752,85,104,'1MHZ_SEL', 'ROT'),
-                Control(488,752,85,104,'100KHZ_SEL', 'ROT'),
-                Control(617,744,85,104,'25KHZ_SEL', 'ROT'),
-                Control(345,897,101,117,'CHN_KNB', 'ROT'),
+                Control(515,205,110,68,'ARC210_TRANS_REC_SEL', 'BTN'),
+                Control(403,205,80,68,'ARC210_GPS', 'BTN'),
+                Control(292,205,80,68,'ARC210_TOD_REC', 'BTN'),
+                Control(143,207,80,68,'ARC210_TOD_SEND', 'BTN'),
+                Control(40,345,97,68,'ARC210_FSK_UP', 'BTN'),
+                Control(40,473,97,68,'ARC210_FSK_MID', 'BTN'),
+                Control(40,604,97,68,'ARC210_FSK_LOW', 'BTN'),
+                Control(8,694,61,94,'ARC210_BRIGHT_INC', 'BTN'),
+                Control(10,827,57,80,'ARC210_BRIGHT_DEC', 'BTN'),
+                Control(718,465,68,90,'ARC210_AMP_FREQ_MODUL', 'BTN'),
+                Control(715,600,71,95,'ARC210_OFF_FREQ', 'BTN'),
+                Control(611,600,71,95,'ARC210_TRANS_REC_FUNC', 'BTN'),
+                Control(612,467,71,95,'ARC210_MENU', 'BTN'),
+                Control(724,723,63,173,'ARC210_ENTER', 'BTN'),
+                Control(91,752,88,104,'ARC210_100MHZ_SEL', 'ROT'),
+                Control(222,752,92,104,'ARC210_10MHZ_SEL', 'ROT'),
+                Control(354,752,85,104,'ARC210_1MHZ_SEL', 'ROT'),
+                Control(488,752,85,104,'ARC210_100KHZ_SEL', 'ROT'),
+                Control(617,744,85,104,'ARC210_25KHZ_SEL', 'ROT'),
+                Control(345,897,101,117,'ARC210_CHN_KNB', 'ROT'),
 
-                Control(153,900,103,125,'MASTER', 'SEL_8'),
-                Control(543,892,103,125,'SEC_SW', 'SEL_8'),
-                Control(640,329,90,87,'SQUELCH', 'SEL_2'),
+                Control(153,900,103,125,'ARC210_MASTER', 'SEL_8'),
+                Control(543,892,103,125,'ARC210_SEC_SW', 'SEL_8'),
+                Control(640,329,90,87,'ARC210_SQUELCH', 'SEL_2'),
                ]
 
 # Initialization
@@ -238,7 +249,7 @@ squelch_img = pygame.transform.scale(squelch_img, (70,70))
 click_sound = pygame.mixer.Sound("click.wav")
 
 cduFont = BitmapFontScreen(screen, 178, 117, (0, 255, 0), 1.0, 0)
-arc210Font = BitmapFontScreen(screen, 205, 365, (0, 0, 255), 1.15, 10)
+#arc210Font = BitmapFontScreen(screen, 205, 365, (0, 0, 255), 1.15, 10)
 
 # DCS-Bios Parser
 parser = ProtocolParser()
@@ -248,26 +259,18 @@ pygame.scrap.init()
 #pixelRuler = PixelRuler(650,400,82,104)
 
 clock = pygame.time.Clock()
-frame_count = 0
 looprate_max = 60 # Keep the loop fast to receive DCS data (45hz actual), but only display it at a fraction of that
 display_divider = 4
 display_counter = 0
 
 print('Starting main loop')
 running = True
-rotating_control = None
-rotating_last_y = 0
-selector_initial_xy = (0,0)
-
-arc210_leftknob_rotation = 0
-arc210_rightknob_rotation = 0
-arc210_squelch_on = False
 
 while running == True:
     # Slow down the loop so we don't kill the CPU
     msThisFrame = clock.tick(looprate_max)
     #print('FPS:' + str(1000/msThisFrame))
-  
+
     # PyGame event loop
     for event in pygame.event.get():
         #print(event.type)
@@ -370,9 +373,11 @@ while running == True:
             right_knob_width,right_knob_height = right_knob_image.get_size()
             screen.blit(right_knob_image, (594 - (right_knob_width/2),956 - (right_knob_height/2)))
 
+            #print('Drawing squelch: ',arc210_squelch_on)
             squelch_knob_image = pygame.transform.flip(squelch_img, arc210_squelch_on, False)
             squelch_knob_width,squelch_knob_height = squelch_knob_image.get_size()
             screen.blit(squelch_knob_image, (684 - (squelch_knob_width/2),366 + 7 - (squelch_knob_height/2)))
+            
         else:
             cduScreenBuffer.drawTo(cduFont)
 

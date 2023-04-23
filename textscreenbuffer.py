@@ -25,10 +25,12 @@ class TextScreenBuffer:
         data_bytes = struct.pack("<H", data)
         self.BUFFER[offset] = data_bytes[0]
         self.BUFFER[offset+1] = data_bytes[1]
+        #print('Received',hex(address),hex(data_bytes[0]),hex(data_bytes[1]))
 
     def drawTo(self, fontScreen):
         for i in range(self.WIDTH*self.HEIGHT):
             row = i // self.WIDTH
             col = i - (row*self.WIDTH)
+            #print('Printing',row,col,hex(self.BUFFER[i]))
 
             fontScreen.set_char(row, col, chr(self.BUFFER[i]))
