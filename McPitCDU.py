@@ -1,6 +1,14 @@
 #!python2
 from __future__ import print_function
 
+# use UDP (configure a UDPSender in BIOSConfig.lua
+# to send the data to the host running this script)
+# Line is:
+# BIOS.protocol_io.UDPSender:create({ port = 7779, host = "127.0.0.1" })
+CONNECTION = {
+    "host":"192.168.84.139"
+}
+
 import sys, pygame, math
 
 import socket
@@ -37,7 +45,7 @@ def btn_press(btn):
     elif(btn == 'TOGGLE'):
         return
     else:
-        if mode == 'ARC210':
+        if mode == 'arc210':
             msg1 = 'ARC210_' + btn + ' 1'
             msg2 = 'ARC210_' + btn + ' 0'
         else:
@@ -187,14 +195,6 @@ arc210_controls = [
                ]
 
 # Initialization
-
-# use UDP (configure a UDPSender in BIOSConfig.lua
-# to send the data to the host running this script)
-# Line is:
-# BIOS.protocol_io.UDPSender:create({ port = 7779, host = "127.0.0.1" })
-CONNECTION = {
-    "host":"192.168.84.139"
-}
 
 print ('Waiting to connect...')
 
