@@ -198,7 +198,7 @@ arc210_controls = [
                 Control(354,752,85,104,'ARC210_1MHZ_SEL', 'ROT'),
                 Control(488,752,85,104,'ARC210_100KHZ_SEL', 'ROT'),
                 Control(617,744,85,104,'ARC210_25KHZ_SEL', 'ROT'),
-                Control(345,897,101,117,'ARC210_CHN_KNB', 'ROT'),
+                Control(345,897,101,117,'ARC210_CHN_KNB', 'ROT_3200'),
 
                 Control(153,900,103,125,'ARC210_MASTER', 'SEL_8'),
                 Control(543,892,103,125,'ARC210_SEC_SW', 'SEL_8'),
@@ -310,6 +310,14 @@ while running == True:
                     elif( y-rotating_last_y < -50 ):
                         rotate_control(rotating_control, "INC")
                         rotating_last_y = y
+                elif( rotating_control.TYPE == 'ROT_3200' ):
+                    x,y = pygame.mouse.get_pos()
+                    if( y-rotating_last_y > 50 ):
+                        rotate_control(rotating_control, "-3200")
+                        rotating_last_y = y
+                    elif( y-rotating_last_y < -50 ):
+                        rotate_control(rotating_control, "+3200")
+                        rotating_last_y = y
         elif( event.type == MOUSEBUTTONUP ):
             rotating_control = None
             #print( 'MOUSEBUTTONUP' )        
@@ -321,7 +329,7 @@ while running == True:
                         
             for ctl in activeControls:
                 if( x >= ctl.X and x < (ctl.X+ctl.WIDTH) and y >= ctl.Y and (y < ctl.Y+ctl.HEIGHT) ):
-                    if( ctl.TYPE == 'ROT' ):
+                    if( ctl.TYPE == 'ROT' or ctl.TYPE == 'ROT_3200' ):
                         print('Start ROT: ' + ctl.PARAM)
                         rotating_control = ctl
                         rotating_last_y = y
