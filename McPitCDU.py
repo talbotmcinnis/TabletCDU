@@ -227,7 +227,7 @@ pygame.mixer.init()
 mode = "cdu"
 
 size = width, height = 800, 1280
-screen = pygame.display.set_mode(size, pygame.DOUBLEBUF , 32)
+screen = pygame.display.set_mode(size, pygame.DOUBLEBUF | pygame.NOFRAME | pygame.FULLSCREEN, 32)
 # | pygame.NOFRAME | pygame.FULLSCREEN  # Todo: put these back in for production
 
 #Loading
