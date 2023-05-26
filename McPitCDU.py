@@ -32,23 +32,23 @@ arc210_rightknob_rotation = 0
 arc210_squelch_on = False
 
 def btn_press(btn):
-    if(btn == '+'):
+    if(btn == 'CDU_+'):
         msg1 = 'CDU_DATA 2'
         msg2 = 'CDU_DATA 1'
-    elif(btn == '-'):
+    elif(btn == 'CDU_-'):
         msg1 = 'CDU_DATA 0'
         msg2 = 'CDU_DATA 1'
-    elif(btn == 'PG+'):
+    elif(btn == 'CDU_PG+'):
         msg1 = 'CDU_PG 2'
         msg2 = 'CDU_PG 1'
-    elif(btn == 'PG-'):
+    elif(btn == 'CDU_PG-'):
         msg1 = 'CDU_PG 0'
         msg2 = 'CDU_PG 1'
     elif(btn == 'SCROLL_L'):
-        msg1 = 'CDU_SCROLL 0'
+        msg1 = 'CDU_SCROLL 2'   # Backwards to work-around a DCS bug
         msg2 = 'CDU_SCROLL 1'
     elif(btn == 'SCROLL_R'):
-        msg1 = 'CDU_SCROLL 2'
+        msg1 = 'CDU_SCROLL 0'   # Backwards to work-around a DCS bug
         msg2 = 'CDU_SCROLL 1'
     elif(btn == 'TOGGLE'):
         return
@@ -155,7 +155,7 @@ cdu_controls = [Control(66,531,79,86,'CDU_SYS', 'BTN'),
                Control(46,303,118,67,'CDU_LSK_7L', 'BTN'),
                Control(46,374,118,67,'CDU_LSK_9L', 'BTN'),
                Control(631,163,118,70,'CDU_LSK_3R', 'BTN'),
-               Control(631,234,118,70,'vLSK_5R', 'BTN'),
+               Control(631,234,118,70,'CDU_LSK_5R', 'BTN'),
                Control(631,303,118,67,'CDU_LSK_7R', 'BTN'),
                Control(631,374,118,67,'CDU_LSK_9R', 'BTN'),
                Control(316,1047,82,104,'CDU_BCK', 'BTN'),
